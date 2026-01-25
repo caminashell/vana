@@ -1,10 +1,26 @@
--- TODO: Move this project to its own GitHub repository and include as a submodule.
 -- TODO: Recheck entire file for references to multiple Helpers and remove them, as this is a single-Helper version.
 -- TODO: Localise repeated global patterns at the top of the file for performance.
 -- TODO: Localise functions that are called frequently.
 -- TODO: Move function calls out of prerender, even with interval, checks every frame (60), spiking CPU every ~1s for GC.
 
--- [[ === SETTINGS === ]] ---
+--[[
+
+NOTES: ------ THIS PROJECT IS IN DEVELOPMENT, NOT READY FOR USE ------
+
+Why the stutter feels "rhythmic"
+
+Multiple 1-second loops stacking:
+> heartbeat (every second)
+> trackPartyStructure (1s)
+> Ability recast scan
+> KI checks
+> Countdown decrements
+> GC cleanup
+
+When they align, causes frame hitch.
+
+]]--
+
 _addon = {
   name = 'Vana (Helper)',
   version = '2.6.1-25b',
@@ -20,6 +36,8 @@ res = require('resources')
 images = require('images')
 require 'chat'
 math.randomseed(os.time())
+
+-- [[ === SETTINGS === ]] ---
 
 _w = windower
 addon_path = _w.addon_path
@@ -277,6 +295,7 @@ ready = {
   tame = true,
   troubadour = true,
 }
+
 ability_name = {
   bestial_loyalty = "Bestial Loyalty",
   blaze_of_glory = "Blaze of Glory",
@@ -376,68 +395,52 @@ end
 
 -- [[ === MAIN === ]] ---
 
+-- !! This function creates a new table every time and therefore triggers GC a lot.
+-- !! Examine reusing the same table over time.
 --Update the party/alliance structure
 function updatePartyStructure()
 
-  -- Reuse a single reusable table
-  -- ... not short lived ones which causes GC pauses every few seconds.
-  party_structure = party_structure or {}
-  local ps = party_structure
-  ps.alliance_leader = nil
-  ps.party1_leader = nil
-  ps.party2_leader = nil
-  ps.party3_leader = nil
-  ps.party1_count = nil
-  ps.party2_count = nil
-  ps.party3_count = nil
-  ps.p0 = nil
-  ps.p1 = nil
-  ps.p2 = nil
-  ps.p3 = nil
-  ps.p4 = nil
-  ps.p5 = nil
-  ps.a10 = nil
-  ps.a11 = nil
-  ps.a12 = nil
-  ps.a13 = nil
-  ps.a14 = nil
-  ps.a15 = nil
-  ps.a20 = nil
-  ps.a21 = nil
-  ps.a22 = nil
-  ps.a23 = nil
-  ps.a24 = nil
-  ps.a25 = nil
+	-- Get the current party data
+	local current_party = get_party()
 
-  -- Get the current party data
-  local party = get_party()
+	local new_party_structure = new_party_structure or {
+		alliance_leader = nil,
+		party1_leader = nil,
+		party2_leader = nil,
+		party3_leader = nil,
+		party1_count = nil,
+		party2_count = nil,
+		party3_count = nil,
+		p0 = nil, p1 = nil, p2 = nil, p3 = nil, p4 = nil, p5 = nil,
+		a10 = nil, a11 = nil, a12 = nil, a13 = nil, a14 = nil, a15 = nil,
+		a20 = nil, a21 = nil, a22 = nil, a23 = nil, a24 = nil, a25 = nil
+	}
 
+	-- List of positions to iterate over in the current_party table
+	local all_positions = all_positions or {
+		'p0', 'p1', 'p2', 'p3', 'p4', 'p5',
+		'a10', 'a11', 'a12', 'a13', 'a14', 'a15',
+		'a20', 'a21', 'a22', 'a23', 'a24', 'a25',
+	}
 
-  -- List of positions to iterate over in the party table
-  local party_positions = {
-    'p0', 'p1', 'p2', 'p3', 'p4', 'p5',
-    'a10', 'a11', 'a12', 'a13', 'a14', 'a15',
-    'a20', 'a21', 'a22', 'a23', 'a24', 'a25',
-  }
+	-- Fill the new_party_structure table with player names
+	for _, position in ipairs(all_positions) do
+		local name = current_party[position] and current_party[position].name or nil
+		if name then
+			new_party_structure[position] = name
+		end
+	end
 
-  -- Fill the new_party_structure table with player names
-  for _, position in ipairs(party_positions) do
-    local name = party[position] and party[position].name or nil
-    if name then
-      ps[position] = name
-    end
-  end
+	-- Fill leader positions in new_party_structure
+	new_party_structure.alliance_leader = current_party.alliance_leader
+	new_party_structure.party1_leader = current_party.party1_leader
+	new_party_structure.party2_leader = current_party.party2_leader
+	new_party_structure.party3_leader = current_party.party3_leader
+	new_party_structure.party1_count = current_party.party1_count
+	new_party_structure.party2_count = current_party.party2_count
+	new_party_structure.party3_count = current_party.party3_count
 
-  -- Fill leader positions in new_party_structure
-  ps.alliance_leader = party.alliance_leader
-  ps.party1_leader = party.party1_leader
-  ps.party2_leader = party.party2_leader
-  ps.party3_leader = party.party3_leader
-  ps.party1_count = party.party1_count
-  ps.party2_count = party.party2_count
-  ps.party3_count = party.party3_count
-
-  return ps
+	return new_party_structure
 
 end
 
@@ -450,33 +453,38 @@ function firstRun()
   settings.first_run = false
   schedule_settings_save()
 
-  add_to_chat(8,('[Helper] '):color(220)..('Initialising Vana (Helper)...'):color(8))
+  add_to_chat(8,('[Vana] '):color(220)..('Initialising Vana (Helper)...'):color(8))
   coroutine.sleep(1)
 
-  add_to_chat(8,('[Helper] '):color(220)..('Type '):color(8)..('//helper help '):color(1)..('at any time to view the list of commands.'):color(8))
+  add_to_chat(8,('[Vana] '):color(220)..('Type '):color(8)..('//helper help '):color(1)..('at any time to view the list of commands.'):color(8))
   coroutine.sleep(1)
 
 end
 
+-- !! Added Debouncing to prevent sound spamming & hitching due to IO load
 --Play the correct sound
 function playSound(sound_name)
 
   if not sound_effects then return end
 
   local file_name = sound_name..".wav"
+  local last_sound = 0
 
-  if sound_cache[file_name:lower()] then
-    play_sound(sound_cache[file_name:lower()])
+  if os.time() - last_sound > 0.2 then
+    if sound_cache[file_name:lower()] then
+      play_sound(sound_cache[file_name:lower()])
 
-  elseif sound_cache[addon_path..file_name:lower()] then
-    play_sound(addon_path..file_name)
+    elseif sound_cache[addon_path..file_name:lower()] then
+      play_sound(addon_path..file_name)
 
-  elseif sound_cache[("notification.wav"):lower()] then
-    play_sound(sound_cache[("notification.wav"):lower()])
+    elseif sound_cache[("notification.wav"):lower()] then
+      play_sound(sound_cache[("notification.wav"):lower()])
 
-  elseif sound_cache[(addon_path.."notification.wav"):lower()] then
-    play_sound(addon_path.."notification.wav")
+    elseif sound_cache[(addon_path.."notification.wav"):lower()] then
+      play_sound(addon_path.."notification.wav")
 
+    end
+    last_sound = os.time()
   end
 
 end
@@ -676,7 +684,7 @@ function initialize()
           settings.options.current_helper = 'vana'
           current_helper = 'vana'
         end
-        add_to_chat(8,('[Helper] '):color(220)..('File '):color(8)..('data/'..name):color(1)..(' does not exist - unloaded from the addon.'):color(8))
+        add_to_chat(8,('[Vana] '):color(220)..('File '):color(8)..('data/'..name):color(1)..(' does not exist - unloaded from the addon.'):color(8))
         schedule_settings_save()
       end
     end
@@ -1016,11 +1024,11 @@ function introduceHelper()
   local introduction = helpers[current.helper].info.introduction
 
   if voices then
-    add_to_chat(8,('[Helper] '):color(220)..('Current Helper: '):color(8)..(current.name):color(1)..(' (Voices Mode: '):color(8)..('On'):color(1)..(')'):color(8))
+    add_to_chat(8,('[Vana] '):color(220)..('Current Helper: '):color(8)..(current.name):color(1)..(' (Voices Mode: '):color(8)..('On'):color(1)..(')'):color(8))
   elseif introduction then
     add_to_chat(current.c_text,('['..current.name..'] '):color(current.c_name)..(introduction):color(current.c_text))
   else
-    add_to_chat(8,('[Helper] '):color(220)..('Current Helper:'):color(8)..(capitalize(helpers[current_helper].name)):color(1)..('.'):color(8))
+    add_to_chat(8,('[Vana] '):color(220)..('Current Helper:'):color(8)..(capitalize(helpers[current_helper].name)):color(1)..('.'):color(8))
   end
 
 end
@@ -1529,21 +1537,6 @@ function trackPartyStructure()
 
 end
 
--- NOTES:
--- Removed from prerender. Even with interval, checks every frame (60), spiking CPU every ~1s for GC.
--- Also uses Windower timing, not os.clock():
-   -- os.clock() is CPU time, not wall time
-   -- GC activity counts as CPU time
-   -- So in original; when GC runs, interval logic collapses and results in bursty execution
-coroutine.schedule(function()
-  while true do
-    coroutine.sleep(1)
-    if not paused and get_info().logged_in then
-      trackPartyStructure()
-    end
-  end
-end)
-
 --Player gains a buff
 register_event('gain buff', function(buff)
 
@@ -1771,9 +1764,30 @@ register_event("incoming text", function(original,modified,original_mode)
 
 end)
 
--- !! Prerender event runs every frame, regardless of interval <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
-register_event('prerender', function()
+-- NOTES:
+-- Removed from prerender. Even with interval, checks every frame (60), spiking CPU every ~1s for GC.
+-- Also uses Windower timing, not os.clock():
+   -- os.clock() is CPU time, not wall time
+   -- GC activity counts as CPU time
+   -- So in original; when GC runs, interval logic collapses and results in bursty execution
+-- coroutine.schedule(function()
+--   while true do
+--     coroutine.sleep(1)
+--     if not paused and get_info().logged_in then
+--       trackPartyStructure()
+--     end
+--   end
+-- end)
 
+-- local last_party_check = 0
+
+-- register_event('time change', function(new, old)
+--   if not paused and get_info().logged_in then
+--     trackPartyStructure()
+--   end
+-- end)
+
+-- !! Prerender event runs every frame (60) per second, regardless of interval <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 -- !! This still runs every frame, and every frame is doing:
 -- !! - get_party()
 -- !! - get_player()
@@ -1784,6 +1798,9 @@ register_event('prerender', function()
 -- !! - String substitutions
 -- !! - Sound logic checks
 -- !! Result: Lua GC spikes every ~1s + CPU spikes > micro-stutters that feel like frame hitching.
+-- register_event('prerender', function()
+-- !! Using Windower timing, not os.clock() which is CPU time, not wall time
+register_event('time change', function(new, old)
 
   -- local pos = get_position()
   local logged_in = get_info().logged_in
@@ -1797,9 +1814,11 @@ register_event('prerender', function()
   end
 
   -- !! Even with interval, checks every frame (60), spiking CPU every ~1s for GC.
-  -- !! if not paused and logged_in then
-  -- !!  trackPartyStructure()
-  -- !! end
+  -- !! Moved to time change event above.
+  -- !! Examine using a coroutine over time change.
+  if not paused and logged_in then
+   trackPartyStructure()
+  end
 
   --1 second heartbeat (does not run while paused (job change, zoning, or immediately after logging in), or not logged in)
   if os.time() > heartbeat and not paused and logged_in then
@@ -1919,6 +1938,7 @@ register_event('prerender', function()
       end
     end
   end
+--   end
 end)
 
 register_event('addon command',function(addcmd, ...)
@@ -1957,7 +1977,7 @@ register_event('addon command',function(addcmd, ...)
     local canteen_ready = getKeyItemReady('canteen')
     local moglophone_ready = getKeyItemReady('moglophone')
     local plate_ready = getKeyItemReady('plate')
-    add_to_chat(8,('[Helper] '):color(220)..('Version '):color(8)..(_addon.version):color(220)..(' by '):color(8)..(_addon.author):color(220)..(' ('):color(8)..(prefix):color(1)..(')'):color(8))
+    add_to_chat(8,('[Vana] '):color(220)..('Version '):color(8)..(_addon.version):color(220)..(' by '):color(8)..(_addon.author):color(220)..(' ('):color(8)..(prefix):color(1)..(')'):color(8))
     add_to_chat(8,' ')
     add_to_chat(8,(' Last update check: '):color(8)..(last_check_date):color(1))
     add_to_chat(8,(' Mystical Canteen: ')..(canteen_ready.text):color(canteen_ready.color))
@@ -1973,19 +1993,19 @@ register_event('addon command',function(addcmd, ...)
       settings.options.media.custom_sounds = false
       custom_sounds = false
       schedule_settings_save()
-      add_to_chat(8,('[Helper] '):color(220)..('Sound Mode: '):color(8)..('Default Sounds'):color(1))
+      add_to_chat(8,('[Vana] '):color(220)..('Sound Mode: '):color(8)..('Default Sounds'):color(1))
     elseif sound_effects then
       settings.options.sound_effects = false
       sound_effects = false
       schedule_settings_save()
-      add_to_chat(8,('[Helper] '):color(220)..('Sound Mode: '):color(8)..('Off'):color(1))
+      add_to_chat(8,('[Vana] '):color(220)..('Sound Mode: '):color(8)..('Off'):color(1))
     else
       settings.options.sound_effects = true
       sound_effects = true
       settings.options.media.custom_sounds = true
       custom_sounds = true
       schedule_settings_save()
-      add_to_chat(8,('[Helper] '):color(220)..('Sound Mode: '):color(8)..('Custom Helper Sounds (if available)'):color(1))
+      add_to_chat(8,('[Vana] '):color(220)..('Sound Mode: '):color(8)..('Custom Helper Sounds (if available)'):color(1))
     end
 
   elseif addcmd == nil then
@@ -1995,7 +2015,7 @@ register_event('addon command',function(addcmd, ...)
     add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..('This is a test notification!'):color(selected.c_text))
     playSound('notification')
   else
-    add_to_chat(8,('[Helper] '):color(220)..('Unrecognized command. Type'):color(8)..(' //helper help'):color(1)..(' for a list of commands.'):color(8))
+    add_to_chat(8,('[Vana] '):color(220)..('Unrecognized command. Type'):color(8)..(' //helper help'):color(1)..(' for a list of commands.'):color(8))
 
   end
 end)
