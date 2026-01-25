@@ -545,6 +545,11 @@ function setSparkoladeReminderTimestamp()
   local future_time = now + (days_until_next * 86400)  -- Add days in seconds
   local reminder_table = os.date("*t", future_time)  -- Get the correct date
 
+  -- Check if type is a table to protect conversion to timestamps
+  if type(reminder_table) ~= "table" then
+    return
+  end
+
   -- Set the exact reminder time
   reminder_table.hour = hour
   reminder_table.min = minute
