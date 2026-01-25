@@ -354,8 +354,6 @@ local function format_message(template, key)
   return result
 end
 
--- [[ === MAIN === ]] ---
-
 -- Determine starting states
 function initialize()
   -- Localise repeated global patterns
@@ -402,9 +400,9 @@ function initialize()
 
 end
 
+-- Update the party/alliance structure
 -- !! This function creates a new table every time and therefore triggers GC a lot.
 -- !! Examine reusing the same table over time.
---Update the party/alliance structure
 function updatePartyStructure()
 
 	-- Get the current party data
@@ -468,8 +466,8 @@ function firstRun()
 
 end
 
+-- Play the correct sound
 -- !! Added Debouncing to prevent sound spamming & hitching due to IO load
---Play the correct sound
 function playSound(sound_name)
 
   if not sound_effects then return end
@@ -496,7 +494,7 @@ function playSound(sound_name)
 
 end
 
---Set the Sparkolade reminder timestamp
+-- Set the Sparkolade reminder timestamp
 function setSparkoladeReminderTimestamp()
 
   local days_of_week = {
@@ -562,7 +560,7 @@ function setSparkoladeReminderTimestamp()
 
 end
 
---Check if the Sparkolade reminder should be triggered (called once per minute)
+-- Check if the Sparkolade reminder should be triggered (called once per minute)
 function checkSparkoladeReminder()
 
   if not sparkolade_reminder or not settings.timestamps or not settings.timestamps.sparkolades then
@@ -593,13 +591,13 @@ function checkSparkoladeReminder()
   end
 end
 
---Save the time of the last check
+-- Save the time of the last check
 function saveLastCheckTime()
   timestamps.last_check = os.time()
   schedule_settings_save()
 end
 
---Save the current timestamp for a key item
+-- Save the current timestamp for a key item
 function saveReminderTimestamp(key_item, key_item_reminder_repeat_hours)
   if not key_item then
     return
@@ -616,7 +614,7 @@ function saveReminderTimestamp(key_item, key_item_reminder_repeat_hours)
   schedule_settings_save()
 end
 
---Check if the player has a key item
+-- Check if the player has a key item
 function haveKeyItem(key_item_id)
   if not key_item_id then
     return false
@@ -635,7 +633,7 @@ function haveKeyItem(key_item_id)
   return false
 end
 
---Check if a key item reminder should be triggered (called every heartbeat (1s))
+-- Check if a key item reminder should be triggered (called every heartbeat (1s))
 function checkKIReminderTimestamps()
 
   --List of tracked key items
@@ -693,7 +691,7 @@ function checkKIReminderTimestamps()
   end
 end
 
---Check if the Mog Locker expiration reminder should be triggered (called once per hour)
+-- Check if the Mog Locker expiration reminder should be triggered (called once per hour)
 function checkMogLockerReminder()
 
   if not mog_locker_expiring then
@@ -735,7 +733,7 @@ function checkMogLockerReminder()
   end
 end
 
---Check if the player is in a town zone
+-- Check if the player is in a town zone
 function isInTownZone()
 
   local current_zone = res.zones[get_info().zone].name
@@ -758,7 +756,7 @@ function isInTownZone()
 
 end
 
---Capitalize first letter
+-- Capitalize first letter
 function capitalize(str)
 
   str = string.gsub(str, "(%w)(%w*)", function(firstLetter, rest)
@@ -769,7 +767,7 @@ function capitalize(str)
 
 end
 
---Introduce the Helper
+-- Introduce the Helper
 function introduceHelper()
 
   local introduction = vana.info.introduction
@@ -782,7 +780,7 @@ function introduceHelper()
 
 end
 
---Update recast timers (called every heartbeat (1s))
+-- Update recast timers (called every heartbeat (1s))
 function updateRecasts()
 
   local ability_recast = get_ability_recasts()
@@ -821,7 +819,7 @@ function updateRecasts()
 
 end
 
---Party MP checks (called every heartbeat (1s))
+-- Party MP checks (called every heartbeat (1s))
 function checkPartyForLowMP()
 
   local player_job = get_player().main_job
@@ -871,20 +869,21 @@ function checkPartyForLowMP()
   end
 end
 
---Replace Mireu zone placeholder
+-- Replace Mireu zone placeholder
 function mireuPlaceholder(text, zone)
   return text:gsub("%${zone}", zone)
 end
 
---Replace party/alliance member names placeholder
+-- Replace party/alliance member names placeholder
 function memberPlaceholder(text, name)
   return text:gsub("%${member}", name)
 end
 
---Replace the ability placeholders (potential call every heartbeat (1s))
+-- Replace the ability placeholders (potential call every heartbeat (1s))
 function abilityPlaceholders(text, ability)
 
   local player_job = get_player().main_job
+
   local SP1 = {
     WAR = "Mighty Strikes", MNK = "Hundred Fists", WHM = "Benediction",
     BLM = "Manafont", RDM = "Chainspell", THF = "Perfect Dodge",
@@ -895,6 +894,7 @@ function abilityPlaceholders(text, ability)
     DNC = "Trance", SCH = "Tabula Rasa", GEO = "Bolster",
     RUN = "Elemental Sforzo"
   }
+
   local SP2 = {
     WAR = "Brazen Rush", MNK = "Inner Strength", WHM = "Asylum",
     BLM = "Subtle Sorcery", RDM = "Stymie", THF = "Larceny",
@@ -907,6 +907,7 @@ function abilityPlaceholders(text, ability)
   }
 
   local ability_name
+
   if ability == "SP1" then
     ability_name = SP1[player_job]
   elseif ability == "SP2" then
@@ -970,7 +971,7 @@ function findDifferences(old_members, new_members)
 
 end
 
---Compare party/alliance structure
+-- Compare party/alliance structure
 function trackPartyStructure()
   -- Debounce/Throttle heavy handler
   local now = os.clock()
@@ -1003,7 +1004,7 @@ function trackPartyStructure()
   local party = get_party()
   local player = get_player()
 
-  --Are we in an alliance
+  -- Check if player is in alliance group
   if party.alliance_leader then
     now_in_alliance = true
     now_in_party = true
@@ -1014,7 +1015,7 @@ function trackPartyStructure()
   end
 
   if not now_in_alliance then
-    --Are we in a party
+    -- Check if player is in a party group
     if party.party1_leader then
       now_in_party = true
       if party.party1_leader == player.id then
@@ -1025,7 +1026,7 @@ function trackPartyStructure()
 
   local msg = nil
 
-  -- You join a party that is in an alliance
+  -- Player joins a party that is in an alliance
   if announce.you_joined_alliance and not previously_in_party and now_in_party and now_in_alliance then
 
     msg = vana.you_joined_alliance
@@ -1035,7 +1036,7 @@ function trackPartyStructure()
       playSound('you_joined_alliance')
     end
 
-  -- You join a party that is not in an alliance
+  -- Player joins a party that is not in an alliance
   elseif announce.you_joined_party and not previously_in_party and now_in_party and not now_party_leader then
 
     msg = vana.you_joined_party
@@ -1045,7 +1046,7 @@ function trackPartyStructure()
       playSound('you_joined_party')
     end
 
-  -- You leave a party that is part of an alliance
+  -- Player leaves a party that is part of an alliance
   elseif announce.you_left_alliance and previously_in_alliance and not now_in_party then
 
     msg = vana.you_left_alliance
@@ -1055,7 +1056,7 @@ function trackPartyStructure()
       playSound('you_left_alliance')
     end
 
-  -- You leave a party that is not part of an alliance
+  -- Player leaves a party that is not part of an alliance
   elseif announce.you_left_party and previously_in_party and not now_in_party then
 
     msg = vana.you_left_party
@@ -1065,7 +1066,7 @@ function trackPartyStructure()
       playSound('you_left_party')
     end
 
-  -- Your party joined an alliance
+  -- Player's party joined an alliance
   elseif announce.your_party_joined_alliance and previously_in_party and now_in_alliance and not previously_in_alliance then
 
     msg = vana.your_party_joined_alliance
@@ -1075,7 +1076,7 @@ function trackPartyStructure()
       playSound('your_party_joined_alliance')
     end
 
-  -- Your party left an alliance
+  -- Player's party left an alliance
   elseif announce.your_party_left_alliance and previously_in_alliance and not now_in_alliance then
 
     msg = vana.your_party_left_alliance
@@ -1129,8 +1130,8 @@ function trackPartyStructure()
             playSound('member_joined_party')
           end
         else
-          --if the name of the member hasn't loaded yet and thus comes back nil/empty,
-          --set the party count back to it's original state to try again
+          -- If the name of the member hasn't loaded yet and thus comes back nil/empty,
+          -- set the party count back to it's original state to try again
           new_party_structure.party1_count = party_structure.party1_count
         end
       end
@@ -1209,7 +1210,7 @@ function trackPartyStructure()
       end
     end
 
-  -- You become the alliance leader
+  -- Player becomes the alliance leader
   elseif announce.you_are_now_alliance_leader and previously_in_alliance and not previously_alliance_leader and now_alliance_leader then
 
     msg = vana.you_are_now_alliance_leader
@@ -1219,7 +1220,7 @@ function trackPartyStructure()
       playSound('now_alliance_leader')
     end
 
-  -- You become the party leader
+  -- Player becomes the party leader
   elseif announce.you_are_now_party_leader and previously_in_party and not previously_party_leader and now_party_leader then
 
     msg = vana.you_are_now_party_leader
@@ -1231,7 +1232,7 @@ function trackPartyStructure()
 
   end
 
-  -- Save the current states for future comparison
+  -- Save current states for future comparison
   in_party = now_in_party
   in_alliance = now_in_alliance
   party_leader = now_party_leader
@@ -1339,16 +1340,16 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
 
     end
 
-  elseif id == 0xB then --zone start
+  elseif id == 0xB then -- Zone start
     if get_info().logged_in then
       zoned = true
       paused = true
     end
 
-  elseif id == 0xA then --zone finish
+  elseif id == 0xA then -- Zone finish
     if get_info().logged_in then
       zoned = false
-      --Short delay after zoning to prevent "left...joined" messages after every zone.
+      -- Short delay after zoning to prevent "left...joined" messages after every zone.
       coroutine.schedule(function()
         paused = false
       end, after_zone_party_check_delay_seconds)
@@ -1747,6 +1748,7 @@ register_event('time change', function(new, old)
         end
 
         -- Only inform if reraise is not active and we are not in town
+        -- !! This might be a gotcha due to DynamisD might need reraise to be active
         if not reraiseActive() and (not reraise_check_not_in_town or (reraise_check_not_in_town and not isInTownZone())) then
 
           local msg = vana.reraise_check

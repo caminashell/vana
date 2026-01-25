@@ -105,7 +105,7 @@
             </party_announcements>
             <reraise_check>true</reraise_check>
             <reraise_check_delay_minutes>60</reraise_check_delay_minutes>
-            <reraise_check_not_in_town>true</reraise_check_not_in_town>
+            <reraise_check_not_in_town>false</reraise_check_not_in_town>
             <sound_effects>true</sound_effects>
             <sparkolade_reminder>true</sparkolade_reminder>
             <sparkolade_reminder_day>Saturday</sparkolade_reminder_day>
