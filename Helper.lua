@@ -1,7 +1,10 @@
+-- TODO: Move this project to its own GitHub repository and include as a submodule.
 -- TODO: Recheck entire file for references to multiple Helpers and remove them, as this is a single-Helper version.
 -- TODO: Localise repeated global patterns at the top of the file for performance.
 -- TODO: Localise functions that are called frequently.
+-- TODO: Move function calls out of prerender, even with interval, checks every frame (60), spiking CPU every ~1s for GC.
 
+-- [[ === SETTINGS === ]] ---
 _addon = {
   name = 'Vana (Helper)',
   version = '2.6.1-25b',
@@ -337,6 +340,8 @@ local placeholder_cache = {}
 local last_party_check = 0
 local PARTY_CHECK_INTERVAL = 1.0 -- seconds
 
+-- [[ === CORE FUNCTIONS === ]] ---
+
 -- Debounced settings save, replacing immediate saves.
 -- Reduces IO load and CPU load.
 local function schedule_settings_save(delay)
@@ -369,51 +374,70 @@ local function format_message(template, key)
   return result
 end
 
+-- [[ === MAIN === ]] ---
 
 --Update the party/alliance structure
 function updatePartyStructure()
 
+  -- Reuse a single reusable table
+  -- ... not short lived ones which causes GC pauses every few seconds.
+  party_structure = party_structure or {}
+  local ps = party_structure
+  ps.alliance_leader = nil
+  ps.party1_leader = nil
+  ps.party2_leader = nil
+  ps.party3_leader = nil
+  ps.party1_count = nil
+  ps.party2_count = nil
+  ps.party3_count = nil
+  ps.p0 = nil
+  ps.p1 = nil
+  ps.p2 = nil
+  ps.p3 = nil
+  ps.p4 = nil
+  ps.p5 = nil
+  ps.a10 = nil
+  ps.a11 = nil
+  ps.a12 = nil
+  ps.a13 = nil
+  ps.a14 = nil
+  ps.a15 = nil
+  ps.a20 = nil
+  ps.a21 = nil
+  ps.a22 = nil
+  ps.a23 = nil
+  ps.a24 = nil
+  ps.a25 = nil
+
   -- Get the current party data
-  local current_party = get_party()
+  local party = get_party()
 
-  local new_party_structure = {
-    alliance_leader = nil,
-    party1_leader = nil,
-    party2_leader = nil,
-    party3_leader = nil,
-    party1_count = nil,
-    party2_count = nil,
-    party3_count = nil,
-    p0 = nil, p1 = nil, p2 = nil, p3 = nil, p4 = nil, p5 = nil,
-    a10 = nil, a11 = nil, a12 = nil, a13 = nil, a14 = nil, a15 = nil,
-    a20 = nil, a21 = nil, a22 = nil, a23 = nil, a24 = nil, a25 = nil
-  }
 
-  -- List of positions to iterate over in the current_party table
-  local all_positions = {
+  -- List of positions to iterate over in the party table
+  local party_positions = {
     'p0', 'p1', 'p2', 'p3', 'p4', 'p5',
     'a10', 'a11', 'a12', 'a13', 'a14', 'a15',
     'a20', 'a21', 'a22', 'a23', 'a24', 'a25',
   }
 
   -- Fill the new_party_structure table with player names
-  for _, position in ipairs(all_positions) do
-    local name = current_party[position] and current_party[position].name or nil
+  for _, position in ipairs(party_positions) do
+    local name = party[position] and party[position].name or nil
     if name then
-      new_party_structure[position] = name
+      ps[position] = name
     end
   end
 
   -- Fill leader positions in new_party_structure
-  new_party_structure.alliance_leader = current_party.alliance_leader
-  new_party_structure.party1_leader = current_party.party1_leader
-  new_party_structure.party2_leader = current_party.party2_leader
-  new_party_structure.party3_leader = current_party.party3_leader
-  new_party_structure.party1_count = current_party.party1_count
-  new_party_structure.party2_count = current_party.party2_count
-  new_party_structure.party3_count = current_party.party3_count
+  ps.alliance_leader = party.alliance_leader
+  ps.party1_leader = party.party1_leader
+  ps.party2_leader = party.party2_leader
+  ps.party3_leader = party.party3_leader
+  ps.party1_count = party.party1_count
+  ps.party2_count = party.party2_count
+  ps.party3_count = party.party3_count
 
-  return new_party_structure
+  return ps
 
 end
 
@@ -457,41 +481,50 @@ function playSound(sound_name)
 
 end
 
+-- !! Deconstruct the selected Helper (WIP)
+local selected_helper = {
+  helper = 'vana',
+  name = helpers['vana'].info.name,
+  c_name = helpers['vana'].info.name_color,
+  c_text = helpers['vana'].info.text_color,
+}
+
+-- !! For removal. Kept for reference.
 --Get the correct Helper
-function getHelper()
-
-  if voices then
-
-    local active_helpers = {}
-    for name, enabled in pairs(helpers_loaded) do
-      if enabled then
-        table.insert(active_helpers, name)
-      end
-    end
-
-    local random_helper = active_helpers[math.random(#active_helpers)]
-    local selected_helper = {
-      helper = random_helper,
-      name = helpers[random_helper].info.name,
-      c_name = helpers[random_helper].info.name_color,
-      c_text = helpers[random_helper].info.text_color,
-    }
-
-    return selected_helper
-
-  else
-
-    local selected_helper = {
-      helper = current_helper,
-      name = helpers[current_helper].info.name,
-      c_name = helpers[current_helper].info.name_color,
-      c_text = helpers[current_helper].info.text_color,
-    }
-
-    return selected_helper
-
-  end
-end
+-- function getHelper()
+-- 
+  -- if voices then
+-- 
+    -- local active_helpers = active_helpers or {}
+    -- for name, enabled in pairs(helpers_loaded) do
+      -- if enabled then
+        -- table.insert(active_helpers, name)
+      -- end
+    -- end
+-- 
+    -- local random_helper = active_helpers[math.random(#active_helpers)]
+    -- local selected_helper = {
+      -- helper = random_helper,
+      -- name = helpers[random_helper].info.name,
+      -- c_name = helpers[random_helper].info.name_color,
+      -- c_text = helpers[random_helper].info.text_color,
+    -- }
+-- 
+    -- return selected_helper
+-- 
+  -- else
+-- 
+    -- local selected_helper = {
+      -- helper = 'vana',
+      -- name = helpers['vana'].info.name,
+      -- c_name = helpers['vana'].info.name_color,
+      -- c_text = helpers['vana'].info.text_color,
+    -- }
+-- 
+    -- return selected_helper
+-- 
+  -- end
+-- end
 
 --Set the Sparkolade reminder timestamp
 function setSparkoladeReminderTimestamp()
@@ -572,7 +605,7 @@ function checkSparkoladeReminder()
 
     if settings.timestamps.sparkolades ~= 0 then
 
-      local selected = getHelper()
+      local selected = selected_helper
       local text = helpers[selected.helper].sparkolade_reminder
       if text then
 
@@ -762,7 +795,7 @@ function checkKIReminderTimestamps()
           key_item_ready[key_item][string.lower(player.name)] = true
           schedule_settings_save()
 
-          local selected = getHelper()
+          local selected = selected_helper
           local text = helpers[selected.helper]['reminder_'..key_item]
           if text then
 
@@ -805,7 +838,7 @@ function checkMogLockerReminder()
 
     if current_time >= reminder_time then
 
-      local selected = getHelper()
+      local selected = selected_helper
       local text = helpers[selected.helper].mog_locker_expiring
       if text then
 
@@ -932,7 +965,7 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
 
     capped_merits = true
 
-    local selected = getHelper()
+    local selected = selected_helper
     local text = helpers[selected.helper].capped_merit_points
     if text then
 
@@ -952,7 +985,7 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
 
     capped_jps = true
 
-    local selected = getHelper()
+    local selected = selected_helper
     local text = helpers[selected.helper].capped_job_points
     if text then
 
@@ -1108,7 +1141,7 @@ function checkPartyForLowMP()
       --Check for high max MP, low mpp, and no existing Ballad or Refresh buff
       if estimated_max_mp > 1000 and member.mpp <= 25 then
 
-        local selected = getHelper()
+        local selected = selected_helper
         local text = helpers[selected.helper].party_low_mp
         if text then
 
@@ -1192,7 +1225,7 @@ end
 -- Helper function to create a table of member names for a given set of positions
 function getMemberNames(structure, positions)
 
-  local members = {}
+  local members = members or {}
 
   for _, position in ipairs(positions) do
     if structure[position] then
@@ -1207,18 +1240,17 @@ end
 -- Helper function to find the difference between two tables of member names
 function findDifferences(old_members, new_members)
 
-  local changes = {
-    added = {},
-    removed = {}
-  }
+  local changes = changes or {}
+  changes.added = {}
+  changes.removed = {}
 
   -- Convert tables to sets for comparison
-  local old_set = {}
+  local old_set = old_set or {}
   for _, name in ipairs(old_members) do
     old_set[name] = true
   end
 
-  local new_set = {}
+  local new_set = new_set or {}
   for _, name in ipairs(new_members) do
     new_set[name] = true
   end
@@ -1271,14 +1303,14 @@ function trackPartyStructure()
   local new_p3_leader = new_party_structure.party3_leader
 
   -- Get the current party data
-  local current_party = get_party()
+  local party = get_party()
   local player = get_player()
 
   --Are we in an alliance
-  if current_party.alliance_leader then
+  if party.alliance_leader then
     now_in_alliance = true
     now_in_party = true
-    if current_party.alliance_leader == player.id then
+    if party.alliance_leader == player.id then
       now_alliance_leader = true
       now_party_leader = true
     end
@@ -1286,9 +1318,9 @@ function trackPartyStructure()
 
   if not now_in_alliance then
     --Are we in a party
-    if current_party.party1_leader then
+    if party.party1_leader then
       now_in_party = true
-      if current_party.party1_leader == player.id then
+      if party.party1_leader == player.id then
         now_party_leader = true
       end
     end
@@ -1297,7 +1329,7 @@ function trackPartyStructure()
   local text = nil
   --You join a party that is in an alliance
   if announce.you_joined_alliance and not previously_in_party and now_in_party and now_in_alliance then
-    local selected = getHelper()
+    local selected = selected_helper
     text = helpers[selected.helper].you_joined_alliance
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
@@ -1306,7 +1338,7 @@ function trackPartyStructure()
 
   --You join a party that is not in an alliance
   elseif announce.you_joined_party and not previously_in_party and now_in_party and not now_party_leader then
-    local selected = getHelper()
+    local selected = selected_helper
     text = helpers[selected.helper].you_joined_party
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
@@ -1315,7 +1347,7 @@ function trackPartyStructure()
 
   --You leave a party that is part of an alliance
   elseif announce.you_left_alliance and previously_in_alliance and not now_in_party then
-    local selected = getHelper()
+    local selected = selected_helper
     text = helpers[selected.helper].you_left_alliance
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
@@ -1324,7 +1356,7 @@ function trackPartyStructure()
 
   --You leave a party that is not part of an alliance
   elseif announce.you_left_party and previously_in_party and not now_in_party then
-    local selected = getHelper()
+    local selected = selected_helper
     text = helpers[selected.helper].you_left_party
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
@@ -1333,7 +1365,7 @@ function trackPartyStructure()
 
   --Your party joined an alliance
   elseif announce.your_party_joined_alliance and previously_in_party and now_in_alliance and not previously_in_alliance then
-    local selected = getHelper()
+    local selected = selected_helper
     text = helpers[selected.helper].your_party_joined_alliance
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
@@ -1342,7 +1374,7 @@ function trackPartyStructure()
 
   --Your party left an alliance
   elseif announce.your_party_left_alliance and previously_in_alliance and not now_in_alliance then
-    local selected = getHelper()
+    local selected = selected_helper
     text = helpers[selected.helper].your_party_left_alliance
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
@@ -1352,7 +1384,7 @@ function trackPartyStructure()
   --Another party joined the alliance
   elseif announce.other_party_joined_alliance and previously_in_alliance and now_in_alliance and 
   ((not old_p2_leader and new_p2_leader) or (not old_p3_leader and new_p3_leader)) then
-    local selected = getHelper()
+    local selected = selected_helper
     text = helpers[selected.helper].other_party_joined_alliance
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
@@ -1362,7 +1394,7 @@ function trackPartyStructure()
   --Another party left the alliance
   elseif announce.other_party_left_alliance and previously_in_alliance and now_in_alliance and 
   ((old_p2_leader and not new_p2_leader) or (old_p3_leader and not new_p3_leader)) then
-    local selected = getHelper()
+    local selected = selected_helper
     text = helpers[selected.helper].other_party_left_alliance
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
@@ -1383,7 +1415,7 @@ function trackPartyStructure()
     if announce.member_joined_party and new_p1_count > old_p1_count then
       for _, member in ipairs(party1_changes.added) do
         if member ~= '' then
-          local selected = getHelper()
+          local selected = selected_helper
           text = helpers[selected.helper].member_joined_party
           if text then
             text = memberPlaceholder(text, member)
@@ -1401,7 +1433,7 @@ function trackPartyStructure()
     elseif announce.member_left_party and new_p1_count < old_p1_count then
       for _, member in ipairs(party1_changes.removed) do
         if member ~= '' then
-          local selected = getHelper()
+          local selected = selected_helper
           text = helpers[selected.helper].member_left_party
           if text then
             text = memberPlaceholder(text, member)
@@ -1434,7 +1466,7 @@ function trackPartyStructure()
     if announce.member_joined_alliance and (new_p2_count > old_p2_count or new_p3_count > old_p3_count) then
       for _, member in ipairs(alliance_changes.added) do
         if member ~= '' then
-          local selected = getHelper()
+          local selected = selected_helper
           text = helpers[selected.helper].member_joined_alliance
           if text then
             text = memberPlaceholder(text, member)
@@ -1453,7 +1485,7 @@ function trackPartyStructure()
     elseif announce.member_left_alliance and (new_p2_count < old_p2_count or new_p3_count < old_p3_count) then
       for _, member in ipairs(alliance_changes.removed) do
         if member ~= '' then
-          local selected = getHelper()
+          local selected = selected_helper
           text = helpers[selected.helper].member_left_alliance
           if text then
             text = memberPlaceholder(text, member)
@@ -1471,7 +1503,7 @@ function trackPartyStructure()
 
   --You become the alliance leader
   elseif announce.you_are_now_alliance_leader and previously_in_alliance and not previously_alliance_leader and now_alliance_leader then
-    local selected = getHelper()
+    local selected = selected_helper
     text = helpers[selected.helper].you_are_now_alliance_leader
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
@@ -1480,7 +1512,7 @@ function trackPartyStructure()
 
   --You become the party leader
   elseif announce.you_are_now_party_leader and previously_in_party and not previously_party_leader and now_party_leader then
-    local selected = getHelper()
+    local selected = selected_helper
     text = helpers[selected.helper].you_are_now_party_leader
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
@@ -1497,12 +1529,27 @@ function trackPartyStructure()
 
 end
 
+-- NOTES:
+-- Removed from prerender. Even with interval, checks every frame (60), spiking CPU every ~1s for GC.
+-- Also uses Windower timing, not os.clock():
+   -- os.clock() is CPU time, not wall time
+   -- GC activity counts as CPU time
+   -- So in original; when GC runs, interval logic collapses and results in bursty execution
+coroutine.schedule(function()
+  while true do
+    coroutine.sleep(1)
+    if not paused and get_info().logged_in then
+      trackPartyStructure()
+    end
+  end
+end)
+
 --Player gains a buff
 register_event('gain buff', function(buff)
 
   if buff == 188 and sublimation_charged and not paused then --Sublimation: Complete
 
-    local selected = getHelper()
+    local selected = selected_helper
     local text = helpers[selected.helper].sublimation_charged
     if text then
 
@@ -1535,7 +1582,7 @@ register_event('lose buff', function(buff)
   --Food
   if buff == 251 and food_wears_off then
 
-    local selected = getHelper()
+    local selected = selected_helper
     local text = helpers[selected.helper].food_wears_off
     if text then
 
@@ -1548,7 +1595,7 @@ register_event('lose buff', function(buff)
   --Reraise
   elseif buff == 113 and reraise_wears_off then
 
-    local selected = getHelper()
+    local selected = selected_helper
     local text = helpers[selected.helper].reraise_wears_off
     if text then
 
@@ -1578,7 +1625,7 @@ register_event('lose buff', function(buff)
       return
     end
 
-    local selected = getHelper()
+    local selected = selected_helper
     local text = helpers[selected.helper].signet_wears_off
     if text then
 
@@ -1694,7 +1741,7 @@ register_event("incoming text", function(original,modified,original_mode)
           end
 
           --No dragon name is found, so therefore is Mireu
-          local selected = getHelper()
+          local selected = selected_helper
           local text = helpers[selected.helper].mireu_popped
           if text then
 
@@ -1724,7 +1771,19 @@ register_event("incoming text", function(original,modified,original_mode)
 
 end)
 
+-- !! Prerender event runs every frame, regardless of interval <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
 register_event('prerender', function()
+
+-- !! This still runs every frame, and every frame is doing:
+-- !! - get_party()
+-- !! - get_player()
+-- !! - Building multiple tables
+-- !! - updatePartyStructure() > allocates a new table every time
+-- !! - Comparing multiple tables
+-- !! - findDifferences() (table > set > table)
+-- !! - String substitutions
+-- !! - Sound logic checks
+-- !! Result: Lua GC spikes every ~1s + CPU spikes > micro-stutters that feel like frame hitching.
 
   -- local pos = get_position()
   local logged_in = get_info().logged_in
@@ -1737,9 +1796,10 @@ register_event('prerender', function()
     alive = true
   end
 
-  if not paused and logged_in then
-    trackPartyStructure()
-  end
+  -- !! Even with interval, checks every frame (60), spiking CPU every ~1s for GC.
+  -- !! if not paused and logged_in then
+  -- !!  trackPartyStructure()
+  -- !! end
 
   --1 second heartbeat (does not run while paused (job change, zoning, or immediately after logging in), or not logged in)
   if os.time() > heartbeat and not paused and logged_in then
@@ -1748,7 +1808,7 @@ register_event('prerender', function()
 
     updateRecasts()
 
-    local player = get_player()
+    local player = get_player() -- ?? What ?! Already defined above.
     local player_job = player.main_job
 
     --Check if abilities are ready
@@ -1757,7 +1817,7 @@ register_event('prerender', function()
         if recast[ability] and recast[ability] > 0 and ready[ability] then
           ready[ability] = false
         elseif recast[ability] == 0 and not ready[ability] then
-          local selected = getHelper()
+          local selected = selected_helper
           local text = helpers[selected.helper].ability_ready
           if text then
             text = abilityPlaceholders(text, ability_name[ability])
@@ -1807,7 +1867,7 @@ register_event('prerender', function()
       elseif countdowns.vorseal == 0 then
 
         countdowns.vorseal = -1
-        local selected = getHelper()
+        local selected = selected_helper
         local vorseal_text = helpers[selected.helper].vorseal_wearing
         if vorseal_text then
           add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(vorseal_text):color(selected.c_text))
@@ -1847,7 +1907,7 @@ register_event('prerender', function()
         --Only inform if reraise is not active and we are not in town
         if not reraiseActive() and (not reraise_check_not_in_town or (reraise_check_not_in_town and not isInTownZone())) then
 
-          local selected = getHelper()
+          local selected = selected_helper
           local reraise_text = helpers[selected.helper].reraise_check
           if reraise_text then
             add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(reraise_text):color(selected.c_text))
@@ -1931,7 +1991,7 @@ register_event('addon command',function(addcmd, ...)
   elseif addcmd == nil then
 
   elseif addcmd == "test" then
-    local selected = getHelper()
+    local selected = selected_helper
     add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..('This is a test notification!'):color(selected.c_text))
     playSound('notification')
   else
