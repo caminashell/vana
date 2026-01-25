@@ -1,22 +1,13 @@
 -- TODO: Localise repeated global patterns at the top of the file for performance.
 -- TODO: Localise functions that are called frequently.
 -- TODO: Move function calls out of prerender, even with interval, checks every frame (60), spiking CPU every ~1s for GC.
+-- TODO: Feature: Implement Besieged message alert.
+-- TODO: Feature: Implement current job checks for chat alerts (e.g., Looking for WHM, etc).
+-- TODO: Feature: Daily/Weekly task reset notices (Oseem, ROE, Monberaux, Sortie, Odyssey, Domain, etc).
 
 --[[
 
 NOTES: ------ THIS PROJECT IS IN DEVELOPMENT, NOT READY FOR USE ------
-
-Why the stutter feels "rhythmic"
-
-Multiple 1-second loops stacking:
-> heartbeat (every second)
-> trackPartyStructure (1s)
-> Ability recast scan
-> KI checks
-> Countdown decrements
-> GC cleanup
-
-When they align, causes frame hitch.
 
 ]]--
 
@@ -36,14 +27,11 @@ images = require('images')
 require 'chat'
 math.randomseed(os.time())
 
--- [[ === SETTINGS === ]] ---
+-- [[ === DEFINITIONS === ]] ---
 
 _w = windower
 addon_path = _w.addon_path
 add_to_chat = _w.add_to_chat
-create_dir = _w.create_dir
-dir_exists = _w.dir_exists
-file_exists = _w.file_exists
 get_ability_recasts = _w.ffxi.get_ability_recasts
 get_dir = _w.get_dir
 get_info = _w.ffxi.get_info
@@ -52,7 +40,6 @@ get_party = _w.ffxi.get_party
 get_player = _w.ffxi.get_player
 register_event = _w.register_event
 play_sound = _w.play_sound
-send_command = _w.send_command
 
 defaults = {
   first_run = true,
@@ -164,11 +151,9 @@ defaults = {
 vana = {
   info = {
     name = "Vana",
-    introduction = "I'll inform you of important in-game events and reminders to help enhance your gameplay experience. Let's embark on this adventure together!",
-    description = "Friendly, encouraging, and always positive.",
+    introduction = "I'll inform you of important events and reminders to help enhance your experience!",
     name_color = 39,
     text_color = 220,
-    type = "NPC",
   },
   ability_ready = "${ability} is ready to use again.",
   capped_job_points = "Your Job Points are now capped.",
@@ -203,9 +188,6 @@ vana = {
 }
 
 settings = config.load(defaults)
-
-c_name = nil
-c_text = nil
 
 first_run = settings.first_run
 have_key_item = settings.have_key_item
@@ -333,11 +315,11 @@ paused = false
 alive = true
 media_folder = addon_path.."media/"
 
-local _save_scheduled = false
-local sound_cache = {}
-local placeholder_cache = {}
-local last_party_check = 0
-local PARTY_CHECK_INTERVAL = 1.0 -- seconds
+_save_scheduled = false
+sound_cache = {}
+placeholder_cache = {}
+last_party_check = 0
+party_check_interval = 1.0 -- seconds
 
 -- [[ === CORE FUNCTIONS === ]] ---
 
@@ -374,6 +356,52 @@ local function format_message(template, key)
 end
 
 -- [[ === MAIN === ]] ---
+
+-- Determine starting states
+function initialize()
+  -- Localise repeated global patterns
+  -- Should not be calling get_abc() multiple times.
+  local party = get_party()
+  local player = get_player()
+
+  if not player then return end
+
+  limit_points = 0
+  merit_points = 0
+  max_merit_points = 0
+  capped_merits = true
+  cap_points = 0
+  job_points = 500
+  capped_jps = true
+
+  --Update the party/alliance structure
+  party_structure = updatePartyStructure()
+  in_alliance = false
+  if party.alliance_leader then
+    in_alliance = true
+    in_party = true
+    if party.alliance_leader == player.id then
+      alliance_leader = true
+      party_leader = true
+    end
+  end
+  if not in_alliance then
+    in_party = false
+    if party.party1_leader then
+      in_party = true
+      if party.party1_leader == player.id then
+        party_leader = true
+      end
+    end
+  end
+  paused = false
+
+  --Check if we've passed the Sparkolade reminder timestamp while logged out
+  coroutine.schedule(function()
+    checkSparkoladeReminder()
+  end, 5)
+
+end
 
 -- !! This function creates a new table every time and therefore triggers GC a lot.
 -- !! Examine reusing the same table over time.
@@ -535,6 +563,7 @@ function setSparkoladeReminderTimestamp()
 
 end
 
+--Check if the Sparkolade reminder should be triggered (called once per minute)
 function checkSparkoladeReminder()
 
   if not sparkolade_reminder or not settings.timestamps or not settings.timestamps.sparkolades then
@@ -563,52 +592,6 @@ function checkSparkoladeReminder()
     setSparkoladeReminderTimestamp()
 
   end
-end
-
---Determine starting states
-function initialize()
-  -- Localise repeated global patterns
-  -- Should not be calling get_abc() multiple times.
-  local party = get_party()
-  local player = get_player()
-
-  if not player then return end
-
-  limit_points = 0
-  merit_points = 0
-  max_merit_points = 0
-  capped_merits = true
-  cap_points = 0
-  job_points = 500
-  capped_jps = true
-
-  --Update the party/alliance structure
-  party_structure = updatePartyStructure()
-  in_alliance = false
-  if party.alliance_leader then
-    in_alliance = true
-    in_party = true
-    if party.alliance_leader == player.id then
-      alliance_leader = true
-      party_leader = true
-    end
-  end
-  if not in_alliance then
-    in_party = false
-    if party.party1_leader then
-      in_party = true
-      if party.party1_leader == player.id then
-        party_leader = true
-      end
-    end
-  end
-  paused = false
-
-  --Check if we've passed the Sparkolade reminder timestamp while logged out
-  coroutine.schedule(function()
-    checkSparkoladeReminder()
-  end, 5)
-
 end
 
 --Save the time of the last check
@@ -653,7 +636,7 @@ function haveKeyItem(key_item_id)
   return false
 end
 
---Check if a key item reminder should be triggered
+--Check if a key item reminder should be triggered (called every heartbeat (1s))
 function checkKIReminderTimestamps()
 
   --List of tracked key items
@@ -664,7 +647,7 @@ function checkKIReminderTimestamps()
 
   --Loop through each tracked KI
   for key_item, id in pairs(tracked_items) do
-    
+
     if key_item_reminders[key_item] then
 
       local player = get_player()
@@ -711,6 +694,7 @@ function checkKIReminderTimestamps()
   end
 end
 
+--Check if the Mog Locker expiration reminder should be triggered (called once per hour)
 function checkMogLockerReminder()
 
   if not mog_locker_expiring then
@@ -775,18 +759,6 @@ function isInTownZone()
 
 end
 
---Reset starting states
-function reset()
-
-  party_structure = {}
-  in_party = false
-  in_alliance = false
-  party_leader = false
-  alliance_leader = false
-  paused = false
-
-end
-
 --Capitalize first letter
 function capitalize(str)
 
@@ -797,105 +769,6 @@ function capitalize(str)
   return str
 
 end
-
-register_event('incoming chunk', function(id, original, modified, injected, blocked)
-
-  if injected or blocked then return end
-
-  local packet = packets.parse('incoming', original)
-
-  --Menu/zone update packet
-  if id == 0x063 then
-
-    local player = get_player()
-
-    if player then
-      limit_points = packet['Limit Points'] or limit_points
-      merit_points = packet['Merit Points'] or merit_points
-      max_merit_points = packet['Max Merit Points'] or max_merit_points
-      local job = player.main_job_full
-      cap_points = packet[job..' Capacity Points'] or cap_points
-      job_points = packet[job..' Job Points'] or job_points
-    end
-
-  --Killed-a-thing packet
-  elseif id == 0x02D then
-
-    local msg = packet['Message']
-
-    if msg == 371 or msg == 372 then
-      local lp_gained = packet['Param 1']
-      limit_points = limit_points + lp_gained
-      local merits_gained = math.floor(limit_points / 10000)
-      limit_points = limit_points - (merits_gained * 10000)
-      merit_points = merit_points + merits_gained >= max_merit_points and max_merit_points or merit_points + merits_gained
-
-    elseif msg == 718 or msg == 735 then
-      local cp_gained = packet['Param 1']
-      cap_points = cap_points + cp_gained
-      local jp_gained = math.floor(cap_points / 30000)
-      cap_points = cap_points - (jp_gained * 30000)
-      job_points = job_points + jp_gained >= 500 and 500 or job_points + jp_gained
-
-    end
-
-  elseif id == 0xB then --zone start
-    if get_info().logged_in then
-      zoned = true
-      paused = true
-    end
-
-  elseif id == 0xA then --zone finish
-    if get_info().logged_in then
-      zoned = false
-      --Short delay after zoning to prevent "left...joined" messages after every zone.
-      coroutine.schedule(function()
-        paused = false
-      end, after_zone_party_check_delay_seconds)
-    end
-  end
-
-  if paused then return end
-
-  if capped_merit_points and merit_points == max_merit_points and not capped_merits then
-
-    capped_merits = true
-
-    local text = vana.capped_merit_points
-    if text then
-
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
-
-      playSound('capped_merit_points')
-
-    end
-
-  elseif merit_points < max_merit_points and capped_merits then
-
-    capped_merits = false
-
-  end
-
-  if capped_job_points and job_points == 500 and not capped_jps then
-
-    capped_jps = true
-
-    local text = vana.capped_job_points
-    if text then
-
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
-
-      playSound('capped_job_points')
-
-    end
-
-  elseif job_points < 500 and capped_jps then
-
-    capped_jps = false
-
-  end
-
-end)
 
 --Introduce the Helper
 function introduceHelper()
@@ -910,7 +783,7 @@ function introduceHelper()
 
 end
 
---Update recast timers
+--Update recast timers (called every heartbeat (1s))
 function updateRecasts()
 
   local ability_recast = get_ability_recasts()
@@ -949,55 +822,7 @@ function updateRecasts()
 
 end
 
---Load
-register_event('load', function()
-
-  if get_info().logged_in then
-
-    initialize()
-    build_sound_cache()
-    updateRecasts()
-    firstRun()
-    if introduce_on_load then
-      introduceHelper()
-    end
-
-  end
-
-end)
-
---Login
-register_event('login', function()
-
-  paused = true
-
-  --wait 5 seconds to let game values load
-  coroutine.schedule(function()
-
-    initialize()
-
-    paused = false
-
-    updateRecasts()
-    firstRun()
-    if introduce_on_load then
-      introduceHelper()
-    end
-
-  end, 5)
-
-  --wait 6 seconds before auto check/update
-  coroutine.schedule(function()
-  end, 6)
-
-end)
-
---Logout
-register_event('logout', function()
-  reset()
-end)
-
---Party MP checks
+--Party MP checks (called every heartbeat (1s))
 function checkPartyForLowMP()
 
   local player_job = get_player().main_job
@@ -1057,18 +882,7 @@ function memberPlaceholder(text, name)
   return text:gsub("%${member}", name)
 end
 
---Replace Signet placeholder
-function signetPlaceholder(text, buff)
-  local region_buffs = {
-    [253] = "Signet",
-    [256] = "Sanction",
-    [268] = "Sigil",
-    [512] = "Ionis"
-  }
-  return text:gsub("%${signet}", region_buffs[buff] or "Signet")
-end
-
---Replace the ability placeholders
+--Replace the ability placeholders (potential call every heartbeat (1s))
 function abilityPlaceholders(text, ability)
 
   local player_job = get_player().main_job
@@ -1161,7 +975,7 @@ end
 function trackPartyStructure()
   -- Debounce/Throttle heavy handler
   local now = os.clock()
-  if now - last_party_check < PARTY_CHECK_INTERVAL then return end
+  if now - last_party_check < party_check_interval then return end
   last_party_check = now
 
   -- Initialize the new_party_structure table
@@ -1210,93 +1024,111 @@ function trackPartyStructure()
     end
   end
 
-  local text = nil
-  --You join a party that is in an alliance
+  local msg = nil
+
+  -- You join a party that is in an alliance
   if announce.you_joined_alliance and not previously_in_party and now_in_party and now_in_alliance then
-    text = vana.you_joined_alliance
-    if text then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
+
+    msg = vana.you_joined_alliance
+
+    if msg then
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
       playSound('you_joined_alliance')
     end
 
-  --You join a party that is not in an alliance
+  -- You join a party that is not in an alliance
   elseif announce.you_joined_party and not previously_in_party and now_in_party and not now_party_leader then
-    text = vana.you_joined_party
-    if text then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
+
+    msg = vana.you_joined_party
+
+    if msg then
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
       playSound('you_joined_party')
     end
 
-  --You leave a party that is part of an alliance
+  -- You leave a party that is part of an alliance
   elseif announce.you_left_alliance and previously_in_alliance and not now_in_party then
-    text = vana.you_left_alliance
-    if text then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
+
+    msg = vana.you_left_alliance
+
+    if msg then
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
       playSound('you_left_alliance')
     end
 
-  --You leave a party that is not part of an alliance
+  -- You leave a party that is not part of an alliance
   elseif announce.you_left_party and previously_in_party and not now_in_party then
-    text = vana.you_left_party
-    if text then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
+
+    msg = vana.you_left_party
+
+    if msg then
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
       playSound('you_left_party')
     end
 
-  --Your party joined an alliance
+  -- Your party joined an alliance
   elseif announce.your_party_joined_alliance and previously_in_party and now_in_alliance and not previously_in_alliance then
-    text = vana.your_party_joined_alliance
-    if text then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
+
+    msg = vana.your_party_joined_alliance
+
+    if msg then
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
       playSound('your_party_joined_alliance')
     end
 
-  --Your party left an alliance
+  -- Your party left an alliance
   elseif announce.your_party_left_alliance and previously_in_alliance and not now_in_alliance then
-    text = vana.your_party_left_alliance
-    if text then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
+
+    msg = vana.your_party_left_alliance
+
+    if msg then
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
       playSound('your_party_left_alliance')
     end
 
-  --Another party joined the alliance
-  elseif announce.other_party_joined_alliance and previously_in_alliance and now_in_alliance and 
-  ((not old_p2_leader and new_p2_leader) or (not old_p3_leader and new_p3_leader)) then
-    text = vana.other_party_joined_alliance
-    if text then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
+  -- Another party joined the alliance
+  elseif announce.other_party_joined_alliance and previously_in_alliance and now_in_alliance and
+         ((not old_p2_leader and new_p2_leader) or (not old_p3_leader and new_p3_leader)) then
+
+    msg = vana.other_party_joined_alliance
+
+    if msg then
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
       playSound('other_party_joined_alliance')
     end
 
-  --Another party left the alliance
-  elseif announce.other_party_left_alliance and previously_in_alliance and now_in_alliance and 
-  ((old_p2_leader and not new_p2_leader) or (old_p3_leader and not new_p3_leader)) then
-    text = vana.other_party_left_alliance
-    if text then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
+  -- Another party left the alliance
+  elseif announce.other_party_left_alliance and previously_in_alliance and now_in_alliance and
+         ((old_p2_leader and not new_p2_leader) or (old_p3_leader and not new_p3_leader)) then
+
+    msg = vana.other_party_left_alliance
+
+    if msg then
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
       playSound('other_party_left_alliance')
     end
 
-  --Member joined/left your party
-  elseif not text and new_party_structure and party_structure and 
-  new_p1_count and old_p1_count and new_p1_count ~= old_p1_count then
+  -- Member joined/left your party
+  elseif not msg and new_party_structure and party_structure and
+         new_p1_count and old_p1_count and new_p1_count ~= old_p1_count then
 
-    --Compare member names for changes in party 1
+    -- Compare member names for changes in party 1
     local party1_positions = {'p0', 'p1', 'p2', 'p3', 'p4', 'p5'}
     local old_party1_members = getMemberNames(party_structure, party1_positions)
     local new_party1_members = getMemberNames(new_party_structure, party1_positions)
     local party1_changes = findDifferences(old_party1_members, new_party1_members)
 
-    --Member joined your party
+    -- Member joined your party
     if announce.member_joined_party and new_p1_count > old_p1_count then
+
       for _, member in ipairs(party1_changes.added) do
         if member ~= '' then
-                text = vana.member_joined_party
-          if text then
-            text = memberPlaceholder(text, member)
-            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
+          msg = vana.member_joined_party
+          if msg then
+            msg = memberPlaceholder(msg, member)
+            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
             playSound('member_joined_party')
-                end
+          end
         else
           --if the name of the member hasn't loaded yet and thus comes back nil/empty,
           --set the party count back to it's original state to try again
@@ -1304,90 +1136,100 @@ function trackPartyStructure()
         end
       end
 
-    --Member left your party
+    -- Member left your party
     elseif announce.member_left_party and new_p1_count < old_p1_count then
+
       for _, member in ipairs(party1_changes.removed) do
         if member ~= '' then
-                text = vana.member_left_party
-          if text then
-            text = memberPlaceholder(text, member)
-            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
+          msg = vana.member_left_party
+          if msg then
+            msg = memberPlaceholder(msg, member)
+            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
             playSound('member_left_party')
-                end
+          end
         else
-          --if the name of the member hasn't loaded yet and thus comes back nil/empty,
-          --set the party count back to it's original state to try again
+          -- If the name of the member hasn't loaded yet and thus comes back nil/empty,
+          -- set the party count back to it's original state to try again
           new_party_structure.party1_count = party_structure.party1_count
         end
       end
+
     end
 
-  --Member joined/left an alliance party
-  elseif not text and new_party_structure and party_structure and 
-  new_p2_count and old_p2_count and new_p3_count and old_p3_count and
-  (new_p2_count ~= old_p2_count or new_p3_count ~= old_p3_count) then
+  -- Member joined/left an alliance party
+  elseif not msg and new_party_structure and party_structure and
+         new_p2_count and old_p2_count and new_p3_count and old_p3_count and
+         (new_p2_count ~= old_p2_count or new_p3_count ~= old_p3_count) then
 
     -- Compare member names for changes in party 2 and 3 combined (alliance parties)
     local alliance_positions = {
       'a10', 'a11', 'a12', 'a13', 'a14', 'a15',
       'a20', 'a21', 'a22', 'a23', 'a24', 'a25'
     }
+
     local old_alliance_members = getMemberNames(party_structure, alliance_positions)
     local new_alliance_members = getMemberNames(new_party_structure, alliance_positions)
     local alliance_changes = findDifferences(old_alliance_members, new_alliance_members)
 
-    --Member joined an alliance party
+    -- Member joined an alliance party
     if announce.member_joined_alliance and (new_p2_count > old_p2_count or new_p3_count > old_p3_count) then
+
       for _, member in ipairs(alliance_changes.added) do
         if member ~= '' then
-                text = vana.member_joined_alliance
-          if text then
-            text = memberPlaceholder(text, member)
-            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
+          msg = vana.member_joined_alliance
+          if msg then
+            msg = memberPlaceholder(msg, member)
+            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
             playSound('member_joined_alliance')
           end
         else
-          --if the name of the member hasn't loaded yet and thus comes back nil/empty,
-          --set the party count back to it's original state to try again
+          -- If the name of the member hasn't loaded yet and thus comes back nil/empty,
+          -- set the party count back to it's original state to try again
           new_party_structure.party2_count = party_structure.party2_count
           new_party_structure.party3_count = party_structure.party3_count
         end
       end
 
-    --Member left an alliance party
+    -- Member left an alliance party
     elseif announce.member_left_alliance and (new_p2_count < old_p2_count or new_p3_count < old_p3_count) then
+
       for _, member in ipairs(alliance_changes.removed) do
         if member ~= '' then
-                text = vana.member_left_alliance
-          if text then
-            text = memberPlaceholder(text, member)
-            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
+          msg = vana.member_left_alliance
+          if msg then
+            msg = memberPlaceholder(msg, member)
+            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
             playSound('member_left_alliance')
           end
         else
-          --if the name of the member hasn't loaded yet and thus comes back nil/empty,
-          --set the party count back to it's original state to try again
+          -- If the name of the member hasn't loaded yet and thus comes back nil/empty,
+          -- set the party count back to it's original state to try again
           new_party_structure.party2_count = party_structure.party2_count
           new_party_structure.party3_count = party_structure.party3_count
         end
       end
     end
 
-  --You become the alliance leader
+  -- You become the alliance leader
   elseif announce.you_are_now_alliance_leader and previously_in_alliance and not previously_alliance_leader and now_alliance_leader then
-    text = vana.you_are_now_alliance_leader
-    if text then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
+
+    msg = vana.you_are_now_alliance_leader
+
+    if msg then
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
       playSound('now_alliance_leader')
     end
 
-  --You become the party leader
+  -- You become the party leader
   elseif announce.you_are_now_party_leader and previously_in_party and not previously_party_leader and now_party_leader then
-    text = vana.you_are_now_party_leader
-    if text then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
+
+    msg = vana.you_are_now_party_leader
+
+    if msg then
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
       playSound('now_party_leader')
     end
+
   end
 
   -- Save the current states for future comparison
@@ -1399,129 +1241,191 @@ function trackPartyStructure()
 
 end
 
---Player gains a buff
-register_event('gain buff', function(buff)
+-- [[ === WINDOWER EVENTS === ]] --
 
-  if buff == 188 and sublimation_charged and not paused then --Sublimation: Complete
+-- Load
+register_event('load', function()
 
-    local text = vana.sublimation_charged
-    if text then
+  if get_info().logged_in then
 
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
+    initialize()
+    build_sound_cache()
+    updateRecasts()
+    firstRun()
 
-      playSound('sublimation_charged')
-
-    end
-
-  elseif buff == 602 and vorseal_wearing then --Vorseal
-
-    --Set the countdown to 110 minutes (Vorseal lasts 2 hours)
-    countdowns.vorseal = 6600
-
-  end
-end)
-
---Player loses a buff
-register_event('lose buff', function(buff)
-
-  if buff == 602 and vorseal_wearing then --Vorseal
-
-    --Turn the countdown off
-    countdowns.vorseal = -1
-
-  end
-
-  if paused or not alive then return end
-
-  --Food
-  if buff == 251 and food_wears_off then
-
-    local text = vana.food_wears_off
-    if text then
-
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
-
-      playSound('food_wears_off')
-
-    end
-
-  --Reraise
-  elseif buff == 113 and reraise_wears_off then
-
-    local text = vana.reraise_wears_off
-    if text then
-
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
-
-      playSound('reraise_wears_off')
-
-    end
-
-  --Signet, Sanction, Sigil, Ionis
-  elseif (buff == 253 or buff == 256 or buff == 268 or buff == 512) and signet_wears_off then
-
-    local function regionBuffActive()
-      local buffs = _w.ffxi.get_player().buffs
-      local regionBuffs = { [253] = true, [256] = true, [268] = true, [512] = true }
-
-      for _, buffId in ipairs(buffs) do
-        if regionBuffs[buffId] then
-          return true
-        end
-      end
-
-      return false
-    end
-
-    if regionBuffActive() then
-      return
-    end
-
-    local text = vana.signet_wears_off
-    if text then
-
-      text = signetPlaceholder(text, buff)
-
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
-
-      playSound('signet_wears_off')
-
+    if introduce_on_load then
+      introduceHelper()
     end
 
   end
 
 end)
 
---Player changes job
-register_event('job change', function()
+-- Login
+register_event('login', function()
 
-  --prevents job changing from triggerring ability ready notifications
   paused = true
-  coroutine.sleep(3)
-  paused = false
+
+  -- Wait 5 seconds to let game values load
+  coroutine.schedule(function()
+
+    initialize()
+
+    paused = false
+
+    updateRecasts()
+    firstRun()
+
+    if introduce_on_load then
+      introduceHelper()
+    end
+
+  end, 5)
+
+  -- Wait 6 seconds before auto check/update
+  coroutine.schedule(function()
+  end, 6)
 
 end)
 
---Parses incoming text
+-- Logout (reset starting states)
+register_event('logout', function()
+  party_structure = {}
+  in_party = false
+  in_alliance = false
+  party_leader = false
+  alliance_leader = false
+  paused = false
+end)
+
+-- Parse incoming packets
+register_event('incoming chunk', function(id, original, modified, injected, blocked)
+
+  if injected or blocked then return end
+
+  local packet = packets.parse('incoming', original)
+
+  -- Menu/zone update packet
+  if id == 0x063 then
+
+    local player = get_player()
+
+    if player then
+      limit_points = packet['Limit Points'] or limit_points
+      merit_points = packet['Merit Points'] or merit_points
+      max_merit_points = packet['Max Merit Points'] or max_merit_points
+      local job = player.main_job_full
+      cap_points = packet[job..' Capacity Points'] or cap_points
+      job_points = packet[job..' Job Points'] or job_points
+    end
+
+  -- Killed a monster packet
+  elseif id == 0x02D then
+
+    local msg = packet['Message']
+
+    if msg == 371 or msg == 372 then
+      local lp_gained = packet['Param 1']
+      limit_points = limit_points + lp_gained
+      local merits_gained = math.floor(limit_points / 10000)
+      limit_points = limit_points - (merits_gained * 10000)
+      merit_points = merit_points + merits_gained >= max_merit_points and max_merit_points or merit_points + merits_gained
+
+    elseif msg == 718 or msg == 735 then
+      local cp_gained = packet['Param 1']
+      cap_points = cap_points + cp_gained
+      local jp_gained = math.floor(cap_points / 30000)
+      cap_points = cap_points - (jp_gained * 30000)
+      job_points = job_points + jp_gained >= 500 and 500 or job_points + jp_gained
+
+    end
+
+  elseif id == 0xB then --zone start
+    if get_info().logged_in then
+      zoned = true
+      paused = true
+    end
+
+  elseif id == 0xA then --zone finish
+    if get_info().logged_in then
+      zoned = false
+      --Short delay after zoning to prevent "left...joined" messages after every zone.
+      coroutine.schedule(function()
+        paused = false
+      end, after_zone_party_check_delay_seconds)
+    end
+  end
+
+  if paused then return end
+
+  if capped_merit_points and merit_points == max_merit_points and not capped_merits then
+
+    capped_merits = true
+
+    local text = vana.capped_merit_points
+    if text then
+
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
+
+      playSound('capped_merit_points')
+
+    end
+
+  elseif merit_points < max_merit_points and capped_merits then
+
+    capped_merits = false
+
+  end
+
+  if capped_job_points and job_points == 500 and not capped_jps then
+
+    capped_jps = true
+
+    local text = vana.capped_job_points
+    if text then
+
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
+
+      playSound('capped_job_points')
+
+    end
+
+  elseif job_points < 500 and capped_jps then
+
+    capped_jps = false
+
+  end
+
+end)
+
+-- Parses incoming text for Mog locker lease messages and Mireu pop messages
 register_event("incoming text", function(original,modified,original_mode)
 
   if original_mode == 148 then
 
-    --Match the lease expiration message and extract the date/time
+    -- Match the lease expiration message and extract the date/time
     local year, month, day, hour, minute, second = original:match("Your Mog Locker lease is valid until (%d+)/(%d+)/(%d+) (%d+):(%d+):(%d+), kupo%.")
 
-    --If a match is found, convert it to a timestamp
+    -- Enforce number type of above variables
+    year = tonumber(year) or 0
+    month = tonumber(month) or 0
+    day = tonumber(day) or 0
+    hour = tonumber(hour) or 0
+    minute = tonumber(minute) or 0
+    second = tonumber(second) or 0
+
+    -- If a match is found, convert it to a timestamp
     if year and month and day and hour and minute and second then
       local lease_expiry_time = os.time({
-        year = tonumber(year),
-        month = tonumber(month),
-        day = tonumber(day),
-        hour = tonumber(hour),
-        min = tonumber(minute),
-        sec = tonumber(second)
+        year = year,
+        month = month,
+        day = day,
+        hour = hour,
+        min = minute,
+        sec = second
       })
 
-      --Store the timestamp in the timestamps table
+      -- Store the timestamp in the timestamps table
       local player = get_player()
       timestamps.mog_locker_expiration[string.lower(player.name)] = lease_expiry_time
       schedule_settings_save()
@@ -1536,6 +1440,7 @@ register_event("incoming text", function(original,modified,original_mode)
       'Naga Raja',
       'Quetzalcoatl',
     }
+
     local unity_leaders = {
       '{Aldo}',
       '{Apururu}',
@@ -1549,13 +1454,14 @@ register_event("incoming text", function(original,modified,original_mode)
       '{Sylvie}',
       '{Yoran-Oran}',
     }
+
     local zones = {
       "Reisenjima",
       "Ru'Aun",
       "Zi'Tah",
     }
 
-    --Extract all names enclosed in curly brackets
+    -- Extract all names enclosed in curly brackets
     local function extract_bracketed_names(str)
       local names = {}
       for name in str:gmatch("%b{}") do
@@ -1565,13 +1471,13 @@ register_event("incoming text", function(original,modified,original_mode)
     end
 
     for _, zone in ipairs(zones) do
-      --Check if the zone is found in the unity message
+      -- Check if the zone is found in the unity message
       if original:find(zone) then
 
         local bracketed_names = extract_bracketed_names(original)
         local leader_count = 0
 
-        --Check how many bracketed names are valid unity leaders
+        -- Check how many bracketed names are valid unity leaders
         for _, name in ipairs(bracketed_names) do
           for _, leader in ipairs(unity_leaders) do
             if name == leader then
@@ -1581,18 +1487,19 @@ register_event("incoming text", function(original,modified,original_mode)
           end
         end
 
-        --Proceed only if exactly one unity leader is found, and no extra names are enclosed in brackets
+        -- Proceed only if exactly one unity leader is found, and no extra names are enclosed in brackets
         if leader_count == 1 and #bracketed_names == 1 then
 
-          --Check if any dragon name is found
+          -- Check if any dragon name is found
           for _, dragon in ipairs(dragons) do
             if original:find(dragon) then
               return
             end
           end
 
-          --No dragon name is found, so therefore is Mireu
-                local text = vana.mireu_popped
+          -- No dragon name is found, so therefore is Mireu
+          local text = vana.mireu_popped
+
           if text then
 
             if zone == "Zi'Tah" then
@@ -1621,13 +1528,114 @@ register_event("incoming text", function(original,modified,original_mode)
 
 end)
 
+-- Player gains a buff
+register_event('gain buff', function(buff)
+
+  if buff == 188 and sublimation_charged and not paused then -- Sublimation: Complete
+
+    local msg = vana.sublimation_charged
+
+    if msg then
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
+      playSound('ability_ready')
+    end
+
+  elseif buff == 602 and vorseal_wearing then -- Vorseal
+    -- Set the countdown to 110 minutes (Vorseal lasts 2 hours)
+    countdowns.vorseal = 6600
+  end
+end)
+
+-- Player loses a buff
+register_event('lose buff', function(buff)
+
+  if buff == 602 and vorseal_wearing then -- Vorseal
+    -- Turn the countdown off
+    countdowns.vorseal = -1
+  end
+
+  if paused or not alive then return end
+
+  -- Food
+  if buff == 251 and food_wears_off then
+
+    local msg = vana.food_wears_off
+
+    if msg then
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
+      playSound('food_wears_off')
+    end
+
+  -- Reraise
+  elseif buff == 113 and reraise_wears_off then
+
+    local msg = vana.reraise_wears_off
+
+    if msg then
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
+      playSound('reraise_wears_off')
+    end
+
+  -- Signet, Sanction, Sigil, Ionis
+  elseif (buff == 253 or buff == 256 or buff == 268 or buff == 512) and signet_wears_off then
+
+    local function regionBuffActive()
+      local buffs = _w.ffxi.get_player().buffs
+      local regionBuffs = { [253] = true, [256] = true, [268] = true, [512] = true }
+
+      for _, buffId in ipairs(buffs) do
+        if regionBuffs[buffId] then
+          return true
+        end
+      end
+
+      return false
+    end
+
+    -- Replace Signet with appropriate region buff type
+    local function regionBuffType(text)
+      local region_buffs = {
+        [253] = "Signet",
+        [256] = "Sanction",
+        [268] = "Sigil",
+        [512] = "Ionis"
+      }
+      return text:gsub("%${signet}", region_buffs[buff] or "Signet")
+    end
+
+    if regionBuffActive() then
+      return
+    end
+
+    local msg = vana.signet_wears_off
+
+    if msg then
+      msg = regionBuffType(msg)
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
+      playSound('signet_wears_off')
+    end
+
+  end
+
+end)
+
+-- Player changes job
+register_event('job change', function()
+
+  -- Prevents job changing from triggerring ability ready notifications
+  paused = true
+  coroutine.sleep(3)
+  paused = false
+
+end)
+
+-- Main time change event (1 second heartbeat)
 register_event('time change', function(new, old)
 
-  -- local pos = get_position()
   local logged_in = get_info().logged_in
   local player = get_player()
 
-  --The alive flag prevents a few things from happening when you die
+  -- The alive flag prevents a few things from happening when knocked out
   if logged_in and player.vitals.hp == 0 and alive then
     alive = false
   elseif logged_in and player.vitals.hp > 0 and not alive then
@@ -1635,20 +1643,16 @@ register_event('time change', function(new, old)
   end
 
   if not paused and logged_in then
-   trackPartyStructure()
-  end
-
-  --1 second heartbeat (does not run while paused (job change, zoning, or immediately after logging in), or not logged in)
-  if os.time() > heartbeat and not paused and logged_in then
 
     heartbeat = os.time()
 
-    updateRecasts()
-
-    local player = get_player() -- ?? What ?! Already defined above.
     local player_job = player.main_job
 
-    --Check if abilities are ready
+    trackPartyStructure()
+    updateRecasts()
+
+
+    -- Check if abilities are ready
     for ability, enabled in pairs(ability_ready) do
       if enabled then
         if recast[ability] and recast[ability] > 0 and ready[ability] then
@@ -1665,20 +1669,20 @@ register_event('time change', function(new, old)
       end
     end
 
-    --Check if any Key Items are ready
+    -- Check if any Key Items are ready
     checkKIReminderTimestamps()
 
-    --Check on Mog Locker lease expiration time once per hour
+    -- Check on Mog Locker lease expiration time once per hour
     if heartbeat % 3600 == 0 then
       checkMogLockerReminder()
     end
 
-    --Check Sparkolade reminder every 1 minute
+    -- Check Sparkolade reminder every 1 minute
     if heartbeat % 60 == 0 then
       checkSparkoladeReminder()
     end
 
-    --Coutdown for checking party for low mp
+    -- Coutdown for checking party for low mp
     if check_party_for_low_mp and (player_job == 'RDM' or player_job == 'BRD') then
 
       if countdowns.check_party_for_low_mp > 0 then
@@ -1693,7 +1697,7 @@ register_event('time change', function(new, old)
       end
     end
 
-    --Countdown for Vorseal Reminder
+    -- Countdown for Vorseal Reminder
     if vorseal_wearing then
 
       if countdowns.vorseal > 0 then
@@ -1703,31 +1707,36 @@ register_event('time change', function(new, old)
       elseif countdowns.vorseal == 0 then
 
         countdowns.vorseal = -1
-            local vorseal_text = vana.vorseal_wearing
+        local vorseal_text = vana.vorseal_wearing
+
         if vorseal_text then
+
           add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(vorseal_text):color(vana.info.text_color))
           playSound('vorseal_wearing')
+
         end
 
       end
 
     end
 
-    --Countdown for Mireu (so we don't call "Mireu popped" when the battle is over)
+    -- Countdown for Mireu (so we don't call "Mireu popped" when the battle is over)
     if mireu_popped and countdowns.mireu > 0 then
       countdowns.mireu = countdowns.mireu - 1
     end
 
-    --Countdown for Reraise Check
+    -- Countdown for Reraise Check
     if reraise_check and player.vitals.hp ~= 0 then
 
       if countdowns.reraise > 0 then
+
         countdowns.reraise = countdowns.reraise - 1
 
       elseif countdowns.reraise == 0 then
+
         countdowns.reraise = reraise_check_delay_minutes
 
-        --Check if we have reraise active
+        -- Check if we have reraise active
         local function reraiseActive()
           local buffs = get_player().buffs
           for _, buffId in ipairs(buffs) do
@@ -1738,13 +1747,16 @@ register_event('time change', function(new, old)
           return false
         end
 
-        --Only inform if reraise is not active and we are not in town
+        -- Only inform if reraise is not active and we are not in town
         if not reraiseActive() and (not reraise_check_not_in_town or (reraise_check_not_in_town and not isInTownZone())) then
 
-                local reraise_text = vana.reraise_check
-          if reraise_text then
-            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(reraise_text):color(vana.info.text_color))
+          local msg = vana.reraise_check
+
+          if msg then
+
+            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
             playSound('reraise_check')
+
           end
 
         end
@@ -1754,65 +1766,86 @@ register_event('time change', function(new, old)
 --   end
 end)
 
+-- Addon command event
 register_event('addon command',function(addcmd, ...)
 
-  local arg = {...}
+  if addcmd == 'help' or addcmd == nil then
 
-  if addcmd == 'help' then
     local player = get_player()
+
     local function getLastCheckDate()
+
       if not timestamps.last_check or timestamps.last_check == 0 then
         return "Never"
       end
+
       -- Convert the timestamp into a readable date
       return os.date("%a, %b %d, %I:%M %p", timestamps.last_check)
+
     end
+
     local function getKeyItemReady(ki)
+
       if have_key_item[ki][string.lower(player.name)] then
+
         local response = {text = "Have KI", color = 6}
         return response
+
       elseif key_item_ready[ki][string.lower(player.name)] then
+
         local response = {text = "Ready to pickup!", color = 2}
         return response
+
       end
+
       -- Convert the timestamp into a readable date
       local response = {text = os.date("%a, %b %d, %I:%M %p", timestamps[ki][string.lower(player.name)]), color = 28}
       return response
+
     end
-    local last_check_date = getLastCheckDate()    
-    local prefix = "//helper"
+
+    local last_check_date = getLastCheckDate()
     local canteen_ready = getKeyItemReady('canteen')
     local moglophone_ready = getKeyItemReady('moglophone')
     local plate_ready = getKeyItemReady('plate')
-    add_to_chat(8,('[Vana] '):color(220)..('Version '):color(8)..(_addon.version):color(220)..(' by '):color(8)..(_addon.author):color(220)..(' ('):color(8)..(prefix):color(1)..(')'):color(8))
+
+    add_to_chat(8,('  [Vana] '):color(220)..('Version '):color(8)..(_addon.version):color(220))
+    add_to_chat(8,('         Developed by '):color(8)..(_addon.author):color(220))
     add_to_chat(8,' ')
-    add_to_chat(8,(' Last update check: '):color(8)..(last_check_date):color(1))
-    add_to_chat(8,(' Mystical Canteen: ')..(canteen_ready.text):color(canteen_ready.color))
-    add_to_chat(8,(' Moglophone: ')..(moglophone_ready.text):color(moglophone_ready.color))
-    add_to_chat(8,(' Ra\'Kaznarian Plate: ')..(plate_ready.text):color(plate_ready.color))
+    add_to_chat(8,('         Last update check: '):color(8)..(last_check_date):color(1))
+    add_to_chat(8,('         Mystical Canteen: ')..(canteen_ready.text):color(canteen_ready.color))
+    add_to_chat(8,('         Moglophone: ')..(moglophone_ready.text):color(moglophone_ready.color))
+    add_to_chat(8,('         Ra\'Kaznarian Plate: ')..(plate_ready.text):color(plate_ready.color))
     add_to_chat(8,' ')
-    add_to_chat(8,(' Command '):color(36)..('[optional] '):color(53)..('<required> '):color(2)..('- Description'):color(8))
+    add_to_chat(8,('         Command '):color(36)..('[optional] '):color(53)..('<required> '):color(2)..('- Description'):color(8))
     add_to_chat(8,' ')
-    add_to_chat(8,(' sound/s '):color(36)..('- Switch sounds between Custom Helper, Default, or off.'):color(8))
+    add_to_chat(8,('         sound/s '):color(36)..('- Toggle sounds on/off.'):color(8))
+
   elseif addcmd == "sounds" or addcmd == "sound" or addcmd == "s" then
+
     if sound_effects then
+
       settings.options.sound_effects = false
       sound_effects = false
-      schedule_settings_save()
       add_to_chat(8,('[Vana] '):color(220)..('Sound Mode: '):color(8)..('Off'):color(1):upper())
+
     else
+
       settings.options.sound_effects = true
       sound_effects = true
-      schedule_settings_save()
       add_to_chat(8,('[Vana] '):color(220)..('Sound Mode: '):color(8)..('On'):color(1):upper())
+
     end
 
-  elseif addcmd == nil then
+    schedule_settings_save()
 
   elseif addcmd == "test" then
+
     add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..('This is a test notification!'):color(vana.info.text_color))
     playSound('notification')
+
   else
+
     add_to_chat(8,('[Vana] '):color(220)..('Unrecognized command. Type'):color(8)..(' //helper help'):color(1)..(' for a list of commands.'):color(8))
 
   end

@@ -81,7 +81,7 @@ For more info, see the [original Helper addon](https://github.com/iLVL-Key/FFXI/
 
 ## Commands
 
-All commands must be preceded with `//helper` (ex: `//helper list`)  
+All commands must be preceded with `//helper`
 `<required>` `[optional]`
 
 | Command | Description |
@@ -100,7 +100,7 @@ Open the `/Helper/data/settings.xml` file to adjust these settings.
 | `after_zone_party_check_delay_seconds` | Amount of time to pause watching for party structure changes after zoning. Adjust this higher if you get a notification about leaving then immediately joining a party after you zone. |
 | `check_party_for_low_mp` | If you are on BRD or RDM, will keep an eye on your party members' MP levels.<br> - Only watches party members with Max MP over 1,000. |
 | `check_party_for_low_mp_delay_minutes` | Amount of time after alerting you to a party member with low MP to start watching again. |
-| `introduce_on_load` | Plays the current Helper’s introduction text when the addon is loaded. |
+| `introduce_on_load` | Plays the Vana introduction text when the addon is loaded. |
 | `key_item_reminders` | Alerts you when specific Key Items are ready to be picked up again from their respective NPCs.<br> - Tracks Mystical Canteen, Moglophone, and Shiny Ra'Kaznarian Plate.<br> - Sub-settings for turning tracking off for each individually.<br> - Sub-settings for adjusting the amount of time between additional repeat reminders after the first for each individually. |
 | `notifications` | Alerts you about certain events happening.<br> - Alerts for Capped Job Points, Capped Merit Points, Mireu popping, Mog Locker lease expiring, Reraise wearing off, Signet (includes all "region" buffs) wearing off, Sublimation fully charged, and Vorseal wearing off.<br> - Sub-settings for turning alerts off for each individually. |
 | `party_announcements` | Alerts for any party structure updates.<br> - Alerts for party/alliance members joining or leaving, parties joining or leaving alliance, and you becoming party or alliance leader.<br> - Sub-settings for turning alerts off for each individually. |
@@ -122,7 +122,7 @@ Version 2.6.1-25b
   - Moved prerender event body to time change event (prerender runs every frame, time change runs every second).
 - Removed helpers extension mappings as Vana is now a single-Helper addon.
 - Moved media folder to addon root location.
-- Removed cusrom sounds option.
+- Removed custom sounds option.
 - Removed voices option.
 - Removed random helper on load option.
 - Removed redundant xml files.
