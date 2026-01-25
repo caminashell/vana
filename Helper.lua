@@ -15,8 +15,7 @@ _addon = {
   name = 'Vana (Helper)',
   version = '2.6.1-25b',
   author = 'key (keylesta@valefor), caminashell (avestara@asura)',
-  command = {'vana'},
-  commands = {'helper'},
+  commands = {'helper', 'vana'},
   description = 'An in-game notification assistant that provides helpful alerts, prompts, and reminders to enhance your gameplay experience in Final Fantasy XI. See README for details.',
 }
 
@@ -151,7 +150,7 @@ defaults = {
 vana = {
   info = {
     name = "Vana",
-    introduction = "I'll inform you of important events and reminders to help enhance your experience!",
+    introduction = "I'll inform you of events and reminders to help enhance your experience!",
     name_color = 39,
     text_color = 220,
   },
@@ -1809,7 +1808,7 @@ register_event('addon command',function(addcmd, ...)
     local moglophone_ready = getKeyItemReady('moglophone')
     local plate_ready = getKeyItemReady('plate')
 
-    add_to_chat(8,('  [Vana] '):color(220)..('Version '):color(8)..(_addon.version):color(220))
+    add_to_chat(8,('[Vana] '):color(220)..('Version '):color(8)..(_addon.version):color(220))
     add_to_chat(8,('         Developed by '):color(8)..(_addon.author):color(220))
     add_to_chat(8,' ')
     add_to_chat(8,('         Last update check: '):color(8)..(last_check_date):color(1))
