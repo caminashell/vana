@@ -1,10 +1,14 @@
+-- TODO: Recheck entire file for references to multiple Helpers and remove them, as this is a single-Helper version.
+-- TODO: Localise repeated global patterns at the top of the file for performance.
+-- TODO: Localise functions that are called frequently.
+
 _addon = {
   name = 'Vana (Helper)',
-  version = '2.6.1-22',
-  author = 'key (keylesta@valefor), Refactored by caminashell (avestara@asura)',
+  version = '2.6.1-22b',
+  author = 'key (keylesta@valefor), caminashell (avestara@asura)',
   command = {'vana'},
   commands = {'helper'},
-  description = 'An in-game assistant addon that provides helpful notifications and reminders to enhance your gameplay experience in Final Fantasy XI. This Vana version is purposefully stripped-down to be a standalone alternate of the Helper addon by Keylesta. The original Helper addon contains many unecessary features that block the Windower Lua thread (which runs on the same thread that feeds data to the game), as well as frequent write-to-disk operations, and cause lag spikes, stuttering, and IO process overhead. This version focuses on core features only, and is optimized to minimize performance impact while still providing useful reminders and notifications.',
+  description = 'An in-game notification assistant that provides helpful alerts, prompts, and reminders to enhance your gameplay experience in Final Fantasy XI. This Vana version is purposefully stripped-down to be a standalone alternate of the Helper addon by Keylesta. The original Helper addon contains many unecessary features that block the Windower Lua thread (which runs on the same thread that feeds data to the game), as well as frequent write-to-disk operations, and cause lag spikes, stuttering, and IO process overhead. This version focuses on core features only, and is optimized to minimize performance impact while still providing useful reminders and notifications.',
 }
 
 config = require('config')
@@ -147,12 +151,13 @@ defaults = {
   },
 }
 
+-- TODO: Remove as it not necessary, with only one profile.
 helpers = {}
 --Vana is the default Helper
 vana = {
   info = {
     name = "Vana",
-    introduction = "I am Vana, your personal Helper.",
+    introduction = "I'll inform you of important in-game events and reminders to help enhance your gameplay experience. Let's embark on this adventure together!",
     description = "Friendly, encouraging, and always positive.",
     name_color = 39,
     text_color = 220,
@@ -228,9 +233,13 @@ vana = {
 }
 
 settings = config.load(defaults)
+
+-- TODO: Remove as it not necessary, with only one profile.
 helpers.vana = config.load('vana.xml', vana)
 
+-- TODO: Remove as it not necessary, with only one profile.
 current_helper = 'vana'
+
 c_name = nil
 c_text = nil
 
@@ -370,6 +379,45 @@ new_updates = false
 fade_in = false
 media_folder = addon_path.."data/media/"
 
+local _save_scheduled = false
+local sound_cache = {}
+local placeholder_cache = {}
+local last_party_check = 0
+local PARTY_CHECK_INTERVAL = 1.0 -- seconds
+
+-- Debounced settings save, replacing immediate saves.
+-- Reduces IO load and CPU load.
+local function schedule_settings_save(delay)
+  if _save_scheduled then return end
+  _save_scheduled = true
+  delay = delay or 5
+  coroutine.schedule(function()
+    settings:save('all')
+    _save_scheduled = false
+  end, delay)
+end
+
+-- Sound / file cache (built once, at load time)
+-- Reduces filesystem reads and CPU load.
+local function build_sound_cache()
+  sound_cache = {}
+  -- scan media_folder and helper folders once
+  local files = get_dir(media_folder) or {}
+  for _, f in ipairs(files) do
+    sound_cache[f:lower()] = media_folder..f
+  end
+end
+
+-- TODO: Optimize placeholder replacement with caching (unfinished/unused)
+local function format_message(template, key)
+  local cache_key = template .. (key or '')
+  if placeholder_cache[cache_key] then return placeholder_cache[cache_key] end
+  local result = template:gsub('%${member}', key or '') -- expand as needed
+  placeholder_cache[cache_key] = result
+  return result
+end
+
+
 --Update the party/alliance structure
 function updatePartyStructure()
 
@@ -424,7 +472,7 @@ function firstRun()
 
   first_run = false
   settings.first_run = false
-  settings:save('all')
+  schedule_settings_save()
 
   add_to_chat(8,('[Helper] '):color(220)..('Initialising Vana (Helper)...'):color(8))
   coroutine.sleep(1)
@@ -432,55 +480,25 @@ function firstRun()
   add_to_chat(8,('[Helper] '):color(220)..('Type '):color(8)..('//helper help '):color(1)..('at any time to view the list of commands.'):color(8))
   coroutine.sleep(1)
 
-  add_to_chat(8,('[Helper] '):color(220)..('I hope you enjoy!  -Key'):color(8))
-  coroutine.sleep(1)
-
 end
 
 --Play the correct sound
-function playSound(helper_name, sound_name)
+function playSound(sound_name)
 
   if not sound_effects then return end
 
-  local helper_folder = media_folder..helper_name.."/"
   local file_name = sound_name..".wav"
 
-  if custom_sounds and file_exists(helper_folder..file_name) then
-    play_sound(helper_folder..file_name)
+  if sound_cache[file_name:lower()] then
+    play_sound(sound_cache[file_name:lower()])
 
-  elseif custom_sounds 
-  and (sound_name == "you_joined_party" or sound_name == "you_joined_alliance" or sound_name == "member_joined_party" or sound_name == "member_joined_alliance") 
-  and file_exists(helper_folder.."member_joined_party.wav") then
-    play_sound(helper_folder.."member_joined_party.wav")
-
-  elseif custom_sounds 
-  and (sound_name == "you_left_party" or sound_name == "you_left_alliance" or sound_name == "member_left_party" or sound_name == "member_left_alliance") 
-  and file_exists(helper_folder.."member_left_party.wav") then
-    play_sound(helper_folder.."member_left_party.wav")
-
-  elseif custom_sounds 
-  and (sound_name == "your_party_joined_alliance" or sound_name == "other_party_joined_alliance") 
-  and file_exists(helper_folder.."party_joined_alliance.wav") then
-    play_sound(helper_folder.."party_joined_alliance.wav")
-
-  elseif custom_sounds 
-  and (sound_name == "your_party_left_alliance" or sound_name == "other_party_left_alliance") 
-  and file_exists(helper_folder.."party_left_alliance.wav") then
-    play_sound(helper_folder.."party_left_alliance.wav")
-
-  elseif custom_sounds and file_exists(helper_folder.."notification.wav") then
-    play_sound(helper_folder.."notification.wav")
-
-  elseif file_exists(media_folder..file_name) then
-    play_sound(media_folder..file_name)
-
-  elseif file_exists(addon_path..file_name) then
+  elseif sound_cache[addon_path..file_name:lower()] then
     play_sound(addon_path..file_name)
 
-  elseif file_exists(media_folder.."notification.wav") then
-    play_sound(media_folder.."notification.wav")
+  elseif sound_cache[("notification.wav"):lower()] then
+    play_sound(sound_cache[("notification.wav"):lower()])
 
-  elseif file_exists(addon_path.."notification.wav") then
+  elseif sound_cache[(addon_path.."notification.wav"):lower()] then
     play_sound(addon_path.."notification.wav")
 
   end
@@ -585,7 +603,7 @@ function setSparkoladeReminderTimestamp()
   -- Save the new timestamp
   settings.timestamps = settings.timestamps or {}
   settings.timestamps.sparkolades = reminder_time
-  settings:save('all')
+  schedule_settings_save()
 
 end
 
@@ -608,7 +626,7 @@ function checkSparkoladeReminder()
 
         add_to_chat(selected.c_text, ('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
 
-        playSound(selected.helper, 'sparkolade_reminder')
+        playSound('sparkolade_reminder')
 
       end
 
@@ -622,6 +640,12 @@ end
 
 --Determine starting states
 function initialize()
+  -- Localise repeated global patterns
+  -- Should not be calling get_abc() multiple times.
+  local party = get_party()
+  local player = get_player()
+
+  if not player then return end
 
   limit_points = 0
   merit_points = 0
@@ -634,19 +658,19 @@ function initialize()
   --Update the party/alliance structure
   party_structure = updatePartyStructure()
   in_alliance = false
-  if get_party().alliance_leader then
+  if party.alliance_leader then
     in_alliance = true
     in_party = true
-    if get_party().alliance_leader == get_player().id then
+    if party.alliance_leader == player.id then
       alliance_leader = true
       party_leader = true
     end
   end
   if not in_alliance then
     in_party = false
-    if get_party().party1_leader then
+    if party.party1_leader then
       in_party = true
-      if get_party().party1_leader == get_player().id then
+      if party.party1_leader == player.id then
         party_leader = true
       end
     end
@@ -668,7 +692,7 @@ function initialize()
           current_helper = 'vana'
         end
         add_to_chat(8,('[Helper] '):color(220)..('File '):color(8)..('data/'..name):color(1)..(' does not exist - unloaded from the addon.'):color(8))
-        settings:save('all')
+        schedule_settings_save()
       end
     end
   end
@@ -707,7 +731,7 @@ end
 --Save the time of the last check
 function saveLastCheckTime()
   timestamps.last_check = os.time()
-  settings:save('all')
+  schedule_settings_save()
 end
 
 --Save the current timestamp for a key item
@@ -724,7 +748,7 @@ function saveReminderTimestamp(key_item, key_item_reminder_repeat_hours)
   --Save the timestamp for X hours into the future
   local player = get_player()
   timestamps[key_item][string.lower(player.name)] = os.time() + (hours * 60 * 60)
-  settings:save('all')
+  schedule_settings_save()
 end
 
 --Check if the player has a key item
@@ -767,14 +791,14 @@ function checkKIReminderTimestamps()
       --We just used the KI
       if have_ki and not haveKeyItem(id) then
         have_key_item[key_item][string.lower(player.name)] = false
-        settings:save('all')
+        schedule_settings_save()
         saveReminderTimestamp(key_item) --Set the reminder time for 20 hours from now
 
       --We just received the KI again
       elseif not have_ki and haveKeyItem(id) then
         have_key_item[key_item][string.lower(player.name)] = true
         key_item_ready[key_item][string.lower(player.name)] = false
-        settings:save('all')
+        schedule_settings_save()
 
       --We do not yet have the KI
       elseif not have_ki and not haveKeyItem(id) then
@@ -784,7 +808,7 @@ function checkKIReminderTimestamps()
 
           --KI is now ready
           key_item_ready[key_item][string.lower(player.name)] = true
-          settings:save('all')
+          schedule_settings_save()
 
           local selected = getHelper()
           local text = helpers[selected.helper]['reminder_'..key_item]
@@ -792,7 +816,7 @@ function checkKIReminderTimestamps()
 
             add_to_chat(selected.c_text, ('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
 
-            playSound(selected.helper, 'reminder_'..key_item)
+            playSound('reminder_'..key_item)
 
           end
 
@@ -806,7 +830,7 @@ function checkKIReminderTimestamps()
 end
 
 function checkMogLockerReminder()
-  
+
   if not mog_locker_expiring then
     return
   end
@@ -822,7 +846,7 @@ function checkMogLockerReminder()
   --Expiration is more than a week away, clear reminder timestamp
   if expiration_time - current_time > one_week then
     timestamps.mog_locker_reminder[string.lower(player.name)] = 0
-    settings:save('all')
+    schedule_settings_save()
 
   --Expiration is under a week away
   elseif expiration_time - current_time < one_week then
@@ -835,13 +859,13 @@ function checkMogLockerReminder()
 
         add_to_chat(selected.c_text, ('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
 
-        playSound(selected.helper, 'mog_locker_expiring')
+        playSound('mog_locker_expiring')
 
       end
 
       --Update the reminder timestamp to trigger again in 24 hours
       timestamps.mog_locker_reminder[string.lower(player.name)] = current_time + one_day
-      settings:save('all')
+      schedule_settings_save()
 
     end
   end
@@ -962,7 +986,7 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
 
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
 
-      playSound(selected.helper, 'capped_merit_points')
+      playSound('capped_merit_points')
 
     end
 
@@ -982,7 +1006,7 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
 
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
 
-      playSound(selected.helper, 'capped_job_points')
+      playSound('capped_job_points')
 
     end
 
@@ -1083,6 +1107,7 @@ register_event('load', function()
   if get_info().logged_in then
 
     initialize()
+    build_sound_cache()
     updateRecasts()
     firstRun()
     if introduce_on_load then
@@ -1161,7 +1186,7 @@ function checkPartyForLowMP()
 
           add_to_chat(selected.c_text, ('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
 
-          playSound(selected.helper, 'party_low_mp')
+          playSound('party_low_mp')
 
         end
 
@@ -1288,6 +1313,10 @@ end
 
 --Compare party/alliance structure
 function trackPartyStructure()
+  -- Debounce/Throttle heavy handler
+  local now = os.clock()
+  if now - last_party_check < PARTY_CHECK_INTERVAL then return end
+  last_party_check = now
 
   -- Initialize the new_party_structure table
   local new_party_structure = updatePartyStructure()
@@ -1313,12 +1342,13 @@ function trackPartyStructure()
 
   -- Get the current party data
   local current_party = get_party()
+  local player = get_player()
 
   --Are we in an alliance
   if current_party.alliance_leader then
     now_in_alliance = true
     now_in_party = true
-    if get_party().alliance_leader == get_player().id then
+    if current_party.alliance_leader == player.id then
       now_alliance_leader = true
       now_party_leader = true
     end
@@ -1328,7 +1358,7 @@ function trackPartyStructure()
     --Are we in a party
     if current_party.party1_leader then
       now_in_party = true
-      if get_party().party1_leader == get_player().id then
+      if current_party.party1_leader == player.id then
         now_party_leader = true
       end
     end
@@ -1341,7 +1371,7 @@ function trackPartyStructure()
     text = helpers[selected.helper].you_joined_alliance
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
-      playSound(selected.helper, 'you_joined_alliance')
+      playSound('you_joined_alliance')
     end
 
   --You join a party that is not in an alliance
@@ -1350,7 +1380,7 @@ function trackPartyStructure()
     text = helpers[selected.helper].you_joined_party
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
-      playSound(selected.helper, 'you_joined_party')
+      playSound('you_joined_party')
     end
 
   --You leave a party that is part of an alliance
@@ -1359,7 +1389,7 @@ function trackPartyStructure()
     text = helpers[selected.helper].you_left_alliance
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
-      playSound(selected.helper, 'you_left_alliance')
+      playSound('you_left_alliance')
     end
 
   --You leave a party that is not part of an alliance
@@ -1368,7 +1398,7 @@ function trackPartyStructure()
     text = helpers[selected.helper].you_left_party
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
-      playSound(selected.helper, 'you_left_party')
+      playSound('you_left_party')
     end
 
   --Your party joined an alliance
@@ -1377,7 +1407,7 @@ function trackPartyStructure()
     text = helpers[selected.helper].your_party_joined_alliance
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
-      playSound(selected.helper, 'your_party_joined_alliance')
+      playSound('your_party_joined_alliance')
     end
 
   --Your party left an alliance
@@ -1386,7 +1416,7 @@ function trackPartyStructure()
     text = helpers[selected.helper].your_party_left_alliance
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
-      playSound(selected.helper, 'your_party_left_alliance')
+      playSound('your_party_left_alliance')
     end
 
   --Another party joined the alliance
@@ -1396,7 +1426,7 @@ function trackPartyStructure()
     text = helpers[selected.helper].other_party_joined_alliance
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
-      playSound(selected.helper, 'other_party_joined_alliance')
+      playSound('other_party_joined_alliance')
     end
 
   --Another party left the alliance
@@ -1406,7 +1436,7 @@ function trackPartyStructure()
     text = helpers[selected.helper].other_party_left_alliance
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
-      playSound(selected.helper, 'other_party_left_alliance')
+      playSound('other_party_left_alliance')
     end
 
   --Member joined/left your party
@@ -1428,7 +1458,7 @@ function trackPartyStructure()
           if text then
             text = memberPlaceholder(text, member)
             add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
-            playSound(selected.helper, 'member_joined_party')
+            playSound('member_joined_party')
                 end
         else
           --if the name of the member hasn't loaded yet and thus comes back nil/empty,
@@ -1446,7 +1476,7 @@ function trackPartyStructure()
           if text then
             text = memberPlaceholder(text, member)
             add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
-            playSound(selected.helper, 'member_left_party')
+            playSound('member_left_party')
                 end
         else
           --if the name of the member hasn't loaded yet and thus comes back nil/empty,
@@ -1479,7 +1509,7 @@ function trackPartyStructure()
           if text then
             text = memberPlaceholder(text, member)
             add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
-            playSound(selected.helper, 'member_joined_alliance')
+            playSound('member_joined_alliance')
           end
         else
           --if the name of the member hasn't loaded yet and thus comes back nil/empty,
@@ -1498,7 +1528,7 @@ function trackPartyStructure()
           if text then
             text = memberPlaceholder(text, member)
             add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
-            playSound(selected.helper, 'member_left_alliance')
+            playSound('member_left_alliance')
           end
         else
           --if the name of the member hasn't loaded yet and thus comes back nil/empty,
@@ -1515,7 +1545,7 @@ function trackPartyStructure()
     text = helpers[selected.helper].you_are_now_alliance_leader
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
-      playSound(selected.helper, 'now_alliance_leader')
+      playSound('now_alliance_leader')
     end
 
   --You become the party leader
@@ -1524,7 +1554,7 @@ function trackPartyStructure()
     text = helpers[selected.helper].you_are_now_party_leader
     if text then
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
-      playSound(selected.helper, 'now_party_leader')
+      playSound('now_party_leader')
     end
   end
 
@@ -1548,7 +1578,7 @@ register_event('gain buff', function(buff)
 
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
 
-      playSound(selected.helper, 'sublimation_charged')
+      playSound('sublimation_charged')
 
     end
 
@@ -1581,7 +1611,7 @@ register_event('lose buff', function(buff)
 
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
 
-      playSound(selected.helper, 'food_wears_off')
+      playSound('food_wears_off')
 
     end
 
@@ -1594,7 +1624,7 @@ register_event('lose buff', function(buff)
 
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
 
-      playSound(selected.helper, 'reraise_wears_off')
+      playSound('reraise_wears_off')
 
     end
 
@@ -1626,7 +1656,7 @@ register_event('lose buff', function(buff)
 
       add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
 
-      playSound(selected.helper, 'signet_wears_off')
+      playSound('signet_wears_off')
 
     end
 
@@ -1666,7 +1696,7 @@ register_event("incoming text", function(original,modified,original_mode)
       --Store the timestamp in the timestamps table
       local player = get_player()
       timestamps.mog_locker_expiration[string.lower(player.name)] = lease_expiry_time
-      settings:save('all')
+      schedule_settings_save()
 
     end
   end
@@ -1748,7 +1778,7 @@ register_event("incoming text", function(original,modified,original_mode)
 
             add_to_chat(selected.c_text, ('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
 
-            playSound(selected.helper, 'mireu_popped')
+            playSound('mireu_popped')
 
           end
 
@@ -1802,7 +1832,7 @@ register_event('prerender', function()
           if text then
             text = abilityPlaceholders(text, ability_name[ability])
             add_to_chat(selected.c_text, ('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
-            playSound(selected.helper, 'ability_ready')
+            playSound('ability_ready')
                   ready[ability] = true
           end
         end
@@ -1871,7 +1901,7 @@ register_event('prerender', function()
         if vorseal_text then
           add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(vorseal_text):color(selected.c_text))
 
-          playSound(selected.helper, 'vorseal_wearing')
+          playSound('vorseal_wearing')
             end
 
       end
@@ -1911,7 +1941,7 @@ register_event('prerender', function()
           if reraise_text then
             add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(reraise_text):color(selected.c_text))
 
-            playSound(selected.helper, 'reraise_check')
+            playSound('reraise_check')
                 end
 
         end
@@ -1971,19 +2001,19 @@ register_event('addon command',function(addcmd, ...)
     if sound_effects and custom_sounds then
       settings.options.media.custom_sounds = false
       custom_sounds = false
-      settings:save('all')
+      schedule_settings_save()
       add_to_chat(8,('[Helper] '):color(220)..('Sound Mode: '):color(8)..('Default Sounds'):color(1))
     elseif sound_effects then
       settings.options.sound_effects = false
       sound_effects = false
-      settings:save('all')
+      schedule_settings_save()
       add_to_chat(8,('[Helper] '):color(220)..('Sound Mode: '):color(8)..('Off'):color(1))
     else
       settings.options.sound_effects = true
       sound_effects = true
       settings.options.media.custom_sounds = true
       custom_sounds = true
-      settings:save('all')
+      schedule_settings_save()
       add_to_chat(8,('[Helper] '):color(220)..('Sound Mode: '):color(8)..('Custom Helper Sounds (if available)'):color(1))
     end
 
@@ -1992,14 +2022,15 @@ register_event('addon command',function(addcmd, ...)
   elseif addcmd == "test" then
     local selected = getHelper()
     add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..('This is a test notification!'):color(selected.c_text))
-    playSound(selected.helper, 'notification')
+    playSound('notification')
   else
     add_to_chat(8,('[Helper] '):color(220)..('Unrecognized command. Type'):color(8)..(' //helper help'):color(1)..(' for a list of commands.'):color(8))
 
   end
 end)
 
---Copyright (c) 2025-2026, Key, Caminashell
+--Copyright (c) 2025, Key
+--Copyright (c) 2026, Caminashell
 --All rights reserved.
 
 --Redistribution and use in source and binary forms, with or without
