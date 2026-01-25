@@ -62,14 +62,6 @@
             <after_zone_party_check_delay_seconds>8</after_zone_party_check_delay_seconds>
             <check_party_for_low_mp>true</check_party_for_low_mp>
             <check_party_for_low_mp_delay_minutes>15</check_party_for_low_mp_delay_minutes>
-            <current_helper>vana</current_helper>
-            <flavor_text>true</flavor_text>
-            <flavor_text_in_combat>false</flavor_text_in_combat>
-            <flavor_text_window_max_hours>4</flavor_text_window_max_hours>
-            <flavor_text_window_min_hours>2</flavor_text_window_min_hours>
-            <helpers_loaded>
-                <vana>true</vana>
-            </helpers_loaded>
             <introduce_on_load>true</introduce_on_load>
             <key_item_reminders>
                 <canteen>true</canteen>
@@ -80,13 +72,6 @@
                 <plate_repeat_hours>6</plate_repeat_hours>
             </key_item_reminders>
             <media>
-                <custom_sounds>true</custom_sounds>
-                <faceplate_fade_delay_seconds>4</faceplate_fade_delay_seconds>
-                <faceplate_fade_multiplier>5</faceplate_fade_multiplier>
-                <faceplate_pos>
-                    <x>10</x>
-                    <y>480</y>
-                </faceplate_pos>
                 <faceplates>true</faceplates>
                 <faceplates_large>true</faceplates_large>
                 <sound_effects>true</sound_effects>
@@ -118,14 +103,13 @@
                 <your_party_joined_alliance>true</your_party_joined_alliance>
                 <your_party_left_alliance>true</your_party_left_alliance>
             </party_announcements>
-            <random_helper_on_load>false</random_helper_on_load>
             <reraise_check>true</reraise_check>
             <reraise_check_delay_minutes>60</reraise_check_delay_minutes>
             <reraise_check_not_in_town>true</reraise_check_not_in_town>
+            <sound_effects>true</sound_effects>
             <sparkolade_reminder>true</sparkolade_reminder>
             <sparkolade_reminder_day>Saturday</sparkolade_reminder_day>
             <sparkolade_reminder_time>1200</sparkolade_reminder_time>
-            <voices>false</voices>
         </options>
         <timestamps>
             <canteen>
@@ -142,7 +126,7 @@
                 <avestara>1769412621</avestara>
             </moglophone>
             <plate>
-                <avestara>1769362221</avestara>
+                <avestara>1769383822</avestara>
             </plate>
             <sparkolades>1769860800</sparkolades>
         </timestamps>

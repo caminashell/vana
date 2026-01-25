@@ -1,4 +1,3 @@
--- TODO: Recheck entire file for references to multiple Helpers and remove them, as this is a single-Helper version.
 -- TODO: Localise repeated global patterns at the top of the file for performance.
 -- TODO: Localise functions that are called frequently.
 -- TODO: Move function calls out of prerender, even with interval, checks every frame (60), spiking CPU every ~1s for GC.
@@ -114,8 +113,6 @@ defaults = {
     after_zone_party_check_delay_seconds = 8,
     check_party_for_low_mp = true,
     check_party_for_low_mp_delay_minutes = 15,
-    current_helper = "vana",
-    helpers_loaded = {vana = true},
     introduce_on_load = true,
     key_item_reminders = {
       canteen = true,
@@ -126,7 +123,6 @@ defaults = {
       plate_repeat_hours = 6,
     },
     media = {
-      custom_sounds = true,
       sound_effects = true,
     },
     notifications = {
@@ -156,20 +152,15 @@ defaults = {
       you_are_now_alliance_leader = true,
       you_are_now_party_leader = true,
     },
-    random_helper_on_load = false,
     reraise_check = true,
     reraise_check_delay_minutes = 60,
     reraise_check_not_in_town = true,
     sparkolade_reminder = true,
     sparkolade_reminder_day = "Saturday",
     sparkolade_reminder_time = 1200,
-    voices = false,
   },
 }
 
--- TODO: Remove as it not necessary, with only one profile.
-helpers = {}
---Vana is the default Helper
 vana = {
   info = {
     name = "Vana",
@@ -213,12 +204,6 @@ vana = {
 
 settings = config.load(defaults)
 
--- TODO: Remove as it not necessary, with only one profile.
-helpers.vana = config.load('vana.xml', vana)
-
--- TODO: Remove as it not necessary, with only one profile.
-current_helper = 'vana'
-
 c_name = nil
 c_text = nil
 
@@ -233,9 +218,7 @@ capped_job_points = settings.options.notifications.capped_job_points
 capped_merit_points = settings.options.notifications.capped_merit_points
 check_party_for_low_mp = settings.options.check_party_for_low_mp
 check_party_for_low_mp_delay_minutes = math.floor(settings.options.check_party_for_low_mp_delay_minutes * 60)
-custom_sounds = settings.options.media.custom_sounds
 food_wears_off = settings.options.notifications.food_wears_off
-helpers_loaded = settings.options.helpers_loaded
 introduce_on_load = settings.options.introduce_on_load
 key_item_reminders = settings.options.key_item_reminders
 mireu_popped = settings.options.notifications.mireu_popped
@@ -252,7 +235,6 @@ sparkolade_reminder_day = settings.options.sparkolade_reminder_day
 sparkolade_reminder_time = settings.options.sparkolade_reminder_time
 sublimation_charged = settings.options.notifications.sublimation_charged
 vorseal_wearing = settings.options.notifications.vorseal_wearing
-voices = settings.options.voices
 
 countdowns = {
   check_party_for_low_mp = 0,
@@ -349,9 +331,7 @@ check_party_for_low_mp_toggle = true
 zoned = false
 paused = false
 alive = true
-new_updates = false
-fade_in = false
-media_folder = addon_path.."data/media/"
+media_folder = addon_path.."media/"
 
 local _save_scheduled = false
 local sound_cache = {}
@@ -489,51 +469,6 @@ function playSound(sound_name)
 
 end
 
--- !! Deconstruct the selected Helper (WIP)
-local selected_helper = {
-  helper = 'vana',
-  name = helpers['vana'].info.name,
-  c_name = helpers['vana'].info.name_color,
-  c_text = helpers['vana'].info.text_color,
-}
-
--- !! For removal. Kept for reference.
---Get the correct Helper
--- function getHelper()
--- 
-  -- if voices then
--- 
-    -- local active_helpers = active_helpers or {}
-    -- for name, enabled in pairs(helpers_loaded) do
-      -- if enabled then
-        -- table.insert(active_helpers, name)
-      -- end
-    -- end
--- 
-    -- local random_helper = active_helpers[math.random(#active_helpers)]
-    -- local selected_helper = {
-      -- helper = random_helper,
-      -- name = helpers[random_helper].info.name,
-      -- c_name = helpers[random_helper].info.name_color,
-      -- c_text = helpers[random_helper].info.text_color,
-    -- }
--- 
-    -- return selected_helper
--- 
-  -- else
--- 
-    -- local selected_helper = {
-      -- helper = 'vana',
-      -- name = helpers['vana'].info.name,
-      -- c_name = helpers['vana'].info.name_color,
-      -- c_text = helpers['vana'].info.text_color,
-    -- }
--- 
-    -- return selected_helper
--- 
-  -- end
--- end
-
 --Set the Sparkolade reminder timestamp
 function setSparkoladeReminderTimestamp()
 
@@ -613,11 +548,10 @@ function checkSparkoladeReminder()
 
     if settings.timestamps.sparkolades ~= 0 then
 
-      local selected = selected_helper
-      local text = helpers[selected.helper].sparkolade_reminder
+      local text = vana.sparkolade_reminder
       if text then
 
-        add_to_chat(selected.c_text, ('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+        add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
 
         playSound('sparkolade_reminder')
 
@@ -670,55 +604,11 @@ function initialize()
   end
   paused = false
 
--- TODO: Sanitization of helpers_loaded table to remove non-existent Helpers
-  --Load up the Helpers we have enabled
-  for name, enabled in pairs(helpers_loaded) do
-    if enabled then
-      if file_exists(addon_path..''..name..'.xml') then -- previous: 'data/helpers/'
-        helpers[name] = config.load(''..name..'.xml') -- previous: 'data/helpers/'
-      --If the file doesn't exist, unload the Helper
-      else
-        helpers_loaded[name] = nil
-        --If the current Helper is the one we just unloaded, switch to Vana
-        if settings.options.current_helper == name then
-          settings.options.current_helper = 'vana'
-          current_helper = 'vana'
-        end
-        add_to_chat(8,('[Vana] '):color(220)..('File '):color(8)..('data/'..name):color(1)..(' does not exist - unloaded from the addon.'):color(8))
-        schedule_settings_save()
-      end
-    end
-  end
-
   --Check if we've passed the Sparkolade reminder timestamp while logged out
   coroutine.schedule(function()
     checkSparkoladeReminder()
   end, 5)
 
-end
-
---Get a list of local Helper files
-function getLocalHelpers()
-  local local_helpers = {}
-  local helpers_path = addon_path.."" -- previous: 'data/helpers/'
-
-  --Ensure the folder exists before scanning
-  if not dir_exists(helpers_path) then
-    return local_helpers --Return empty table if folder is missing
-  end
-
-  --Get a list of files in the directory
-  local files = get_dir(helpers_path)
-  if files then
-    for _, file in ipairs(files) do
-      if file:match("%.xml$") then --Only process .xml files
-        local name = file:gsub("%.xml$", "") --Remove .xml extension
-        local_helpers[string.lower(name)] = true
-      end
-    end
-  end
-
-  return local_helpers
 end
 
 --Save the time of the last check
@@ -803,11 +693,10 @@ function checkKIReminderTimestamps()
           key_item_ready[key_item][string.lower(player.name)] = true
           schedule_settings_save()
 
-          local selected = selected_helper
-          local text = helpers[selected.helper]['reminder_'..key_item]
+          local text = vana['reminder_'..key_item]
           if text then
 
-            add_to_chat(selected.c_text, ('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+            add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
 
             playSound('reminder_'..key_item)
 
@@ -846,11 +735,10 @@ function checkMogLockerReminder()
 
     if current_time >= reminder_time then
 
-      local selected = selected_helper
-      local text = helpers[selected.helper].mog_locker_expiring
+      local text = vana.mog_locker_expiring
       if text then
 
-        add_to_chat(selected.c_text, ('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+        add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
 
         playSound('mog_locker_expiring')
 
@@ -973,11 +861,10 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
 
     capped_merits = true
 
-    local selected = selected_helper
-    local text = helpers[selected.helper].capped_merit_points
+    local text = vana.capped_merit_points
     if text then
 
-      add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
 
       playSound('capped_merit_points')
 
@@ -993,11 +880,10 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
 
     capped_jps = true
 
-    local selected = selected_helper
-    local text = helpers[selected.helper].capped_job_points
+    local text = vana.capped_job_points
     if text then
 
-      add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
 
       playSound('capped_job_points')
 
@@ -1014,21 +900,12 @@ end)
 --Introduce the Helper
 function introduceHelper()
 
-  local current = {
-    helper = current_helper,
-    name = helpers[current_helper].info.name,
-    c_name = helpers[current_helper].info.name_color,
-    c_text = helpers[current_helper].info.text_color,
-  }
+  local introduction = vana.info.introduction
 
-  local introduction = helpers[current.helper].info.introduction
-
-  if voices then
-    add_to_chat(8,('[Vana] '):color(220)..('Current Helper: '):color(8)..(current.name):color(1)..(' (Voices Mode: '):color(8)..('On'):color(1)..(')'):color(8))
-  elseif introduction then
-    add_to_chat(current.c_text,('['..current.name..'] '):color(current.c_name)..(introduction):color(current.c_text))
+  if introduction then
+    add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(introduction):color(vana.info.text_color))
   else
-    add_to_chat(8,('[Vana] '):color(220)..('Current Helper:'):color(8)..(capitalize(helpers[current_helper].name)):color(1)..('.'):color(8))
+    add_to_chat(8,('[Vana] '):color(220)..('Current Helper:'):color(8)..(capitalize(vana.info.name)):color(1)..('.'):color(8))
   end
 
 end
@@ -1149,13 +1026,12 @@ function checkPartyForLowMP()
       --Check for high max MP, low mpp, and no existing Ballad or Refresh buff
       if estimated_max_mp > 1000 and member.mpp <= 25 then
 
-        local selected = selected_helper
-        local text = helpers[selected.helper].party_low_mp
+            local text = vana.party_low_mp
         if text then
 
           text = refreshPlaceholder(text,member.name,player_job)
 
-          add_to_chat(selected.c_text, ('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+          add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
 
           playSound('party_low_mp')
 
@@ -1337,75 +1213,67 @@ function trackPartyStructure()
   local text = nil
   --You join a party that is in an alliance
   if announce.you_joined_alliance and not previously_in_party and now_in_party and now_in_alliance then
-    local selected = selected_helper
-    text = helpers[selected.helper].you_joined_alliance
+    text = vana.you_joined_alliance
     if text then
-      add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
       playSound('you_joined_alliance')
     end
 
   --You join a party that is not in an alliance
   elseif announce.you_joined_party and not previously_in_party and now_in_party and not now_party_leader then
-    local selected = selected_helper
-    text = helpers[selected.helper].you_joined_party
+    text = vana.you_joined_party
     if text then
-      add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
       playSound('you_joined_party')
     end
 
   --You leave a party that is part of an alliance
   elseif announce.you_left_alliance and previously_in_alliance and not now_in_party then
-    local selected = selected_helper
-    text = helpers[selected.helper].you_left_alliance
+    text = vana.you_left_alliance
     if text then
-      add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
       playSound('you_left_alliance')
     end
 
   --You leave a party that is not part of an alliance
   elseif announce.you_left_party and previously_in_party and not now_in_party then
-    local selected = selected_helper
-    text = helpers[selected.helper].you_left_party
+    text = vana.you_left_party
     if text then
-      add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
       playSound('you_left_party')
     end
 
   --Your party joined an alliance
   elseif announce.your_party_joined_alliance and previously_in_party and now_in_alliance and not previously_in_alliance then
-    local selected = selected_helper
-    text = helpers[selected.helper].your_party_joined_alliance
+    text = vana.your_party_joined_alliance
     if text then
-      add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
       playSound('your_party_joined_alliance')
     end
 
   --Your party left an alliance
   elseif announce.your_party_left_alliance and previously_in_alliance and not now_in_alliance then
-    local selected = selected_helper
-    text = helpers[selected.helper].your_party_left_alliance
+    text = vana.your_party_left_alliance
     if text then
-      add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
       playSound('your_party_left_alliance')
     end
 
   --Another party joined the alliance
   elseif announce.other_party_joined_alliance and previously_in_alliance and now_in_alliance and 
   ((not old_p2_leader and new_p2_leader) or (not old_p3_leader and new_p3_leader)) then
-    local selected = selected_helper
-    text = helpers[selected.helper].other_party_joined_alliance
+    text = vana.other_party_joined_alliance
     if text then
-      add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
       playSound('other_party_joined_alliance')
     end
 
   --Another party left the alliance
   elseif announce.other_party_left_alliance and previously_in_alliance and now_in_alliance and 
   ((old_p2_leader and not new_p2_leader) or (old_p3_leader and not new_p3_leader)) then
-    local selected = selected_helper
-    text = helpers[selected.helper].other_party_left_alliance
+    text = vana.other_party_left_alliance
     if text then
-      add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
       playSound('other_party_left_alliance')
     end
 
@@ -1423,11 +1291,10 @@ function trackPartyStructure()
     if announce.member_joined_party and new_p1_count > old_p1_count then
       for _, member in ipairs(party1_changes.added) do
         if member ~= '' then
-          local selected = selected_helper
-          text = helpers[selected.helper].member_joined_party
+                text = vana.member_joined_party
           if text then
             text = memberPlaceholder(text, member)
-            add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
             playSound('member_joined_party')
                 end
         else
@@ -1441,11 +1308,10 @@ function trackPartyStructure()
     elseif announce.member_left_party and new_p1_count < old_p1_count then
       for _, member in ipairs(party1_changes.removed) do
         if member ~= '' then
-          local selected = selected_helper
-          text = helpers[selected.helper].member_left_party
+                text = vana.member_left_party
           if text then
             text = memberPlaceholder(text, member)
-            add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
             playSound('member_left_party')
                 end
         else
@@ -1474,11 +1340,10 @@ function trackPartyStructure()
     if announce.member_joined_alliance and (new_p2_count > old_p2_count or new_p3_count > old_p3_count) then
       for _, member in ipairs(alliance_changes.added) do
         if member ~= '' then
-          local selected = selected_helper
-          text = helpers[selected.helper].member_joined_alliance
+                text = vana.member_joined_alliance
           if text then
             text = memberPlaceholder(text, member)
-            add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
             playSound('member_joined_alliance')
           end
         else
@@ -1493,11 +1358,10 @@ function trackPartyStructure()
     elseif announce.member_left_alliance and (new_p2_count < old_p2_count or new_p3_count < old_p3_count) then
       for _, member in ipairs(alliance_changes.removed) do
         if member ~= '' then
-          local selected = selected_helper
-          text = helpers[selected.helper].member_left_alliance
+                text = vana.member_left_alliance
           if text then
             text = memberPlaceholder(text, member)
-            add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
             playSound('member_left_alliance')
           end
         else
@@ -1511,19 +1375,17 @@ function trackPartyStructure()
 
   --You become the alliance leader
   elseif announce.you_are_now_alliance_leader and previously_in_alliance and not previously_alliance_leader and now_alliance_leader then
-    local selected = selected_helper
-    text = helpers[selected.helper].you_are_now_alliance_leader
+    text = vana.you_are_now_alliance_leader
     if text then
-      add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
       playSound('now_alliance_leader')
     end
 
   --You become the party leader
   elseif announce.you_are_now_party_leader and previously_in_party and not previously_party_leader and now_party_leader then
-    local selected = selected_helper
-    text = helpers[selected.helper].you_are_now_party_leader
+    text = vana.you_are_now_party_leader
     if text then
-      add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
       playSound('now_party_leader')
     end
   end
@@ -1542,11 +1404,10 @@ register_event('gain buff', function(buff)
 
   if buff == 188 and sublimation_charged and not paused then --Sublimation: Complete
 
-    local selected = selected_helper
-    local text = helpers[selected.helper].sublimation_charged
+    local text = vana.sublimation_charged
     if text then
 
-      add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
 
       playSound('sublimation_charged')
 
@@ -1575,11 +1436,10 @@ register_event('lose buff', function(buff)
   --Food
   if buff == 251 and food_wears_off then
 
-    local selected = selected_helper
-    local text = helpers[selected.helper].food_wears_off
+    local text = vana.food_wears_off
     if text then
 
-      add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
 
       playSound('food_wears_off')
 
@@ -1588,11 +1448,10 @@ register_event('lose buff', function(buff)
   --Reraise
   elseif buff == 113 and reraise_wears_off then
 
-    local selected = selected_helper
-    local text = helpers[selected.helper].reraise_wears_off
+    local text = vana.reraise_wears_off
     if text then
 
-      add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
 
       playSound('reraise_wears_off')
 
@@ -1618,13 +1477,12 @@ register_event('lose buff', function(buff)
       return
     end
 
-    local selected = selected_helper
-    local text = helpers[selected.helper].signet_wears_off
+    local text = vana.signet_wears_off
     if text then
 
       text = signetPlaceholder(text, buff)
 
-      add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
 
       playSound('signet_wears_off')
 
@@ -1734,8 +1592,7 @@ register_event("incoming text", function(original,modified,original_mode)
           end
 
           --No dragon name is found, so therefore is Mireu
-          local selected = selected_helper
-          local text = helpers[selected.helper].mireu_popped
+                local text = vana.mireu_popped
           if text then
 
             if zone == "Zi'Tah" then
@@ -1746,7 +1603,7 @@ register_event("incoming text", function(original,modified,original_mode)
               text = mireuPlaceholder(text, zone)
             end
 
-            add_to_chat(selected.c_text, ('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+            add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
 
             playSound('mireu_popped')
 
@@ -1764,42 +1621,6 @@ register_event("incoming text", function(original,modified,original_mode)
 
 end)
 
--- NOTES:
--- Removed from prerender. Even with interval, checks every frame (60), spiking CPU every ~1s for GC.
--- Also uses Windower timing, not os.clock():
-   -- os.clock() is CPU time, not wall time
-   -- GC activity counts as CPU time
-   -- So in original; when GC runs, interval logic collapses and results in bursty execution
--- coroutine.schedule(function()
---   while true do
---     coroutine.sleep(1)
---     if not paused and get_info().logged_in then
---       trackPartyStructure()
---     end
---   end
--- end)
-
--- local last_party_check = 0
-
--- register_event('time change', function(new, old)
---   if not paused and get_info().logged_in then
---     trackPartyStructure()
---   end
--- end)
-
--- !! Prerender event runs every frame (60) per second, regardless of interval <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<
--- !! This still runs every frame, and every frame is doing:
--- !! - get_party()
--- !! - get_player()
--- !! - Building multiple tables
--- !! - updatePartyStructure() > allocates a new table every time
--- !! - Comparing multiple tables
--- !! - findDifferences() (table > set > table)
--- !! - String substitutions
--- !! - Sound logic checks
--- !! Result: Lua GC spikes every ~1s + CPU spikes > micro-stutters that feel like frame hitching.
--- register_event('prerender', function()
--- !! Using Windower timing, not os.clock() which is CPU time, not wall time
 register_event('time change', function(new, old)
 
   -- local pos = get_position()
@@ -1813,9 +1634,6 @@ register_event('time change', function(new, old)
     alive = true
   end
 
-  -- !! Even with interval, checks every frame (60), spiking CPU every ~1s for GC.
-  -- !! Moved to time change event above.
-  -- !! Examine using a coroutine over time change.
   if not paused and logged_in then
    trackPartyStructure()
   end
@@ -1836,13 +1654,12 @@ register_event('time change', function(new, old)
         if recast[ability] and recast[ability] > 0 and ready[ability] then
           ready[ability] = false
         elseif recast[ability] == 0 and not ready[ability] then
-          local selected = selected_helper
-          local text = helpers[selected.helper].ability_ready
+                local text = vana.ability_ready
           if text then
             text = abilityPlaceholders(text, ability_name[ability])
-            add_to_chat(selected.c_text, ('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
+            add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
             playSound('ability_ready')
-                  ready[ability] = true
+            ready[ability] = true
           end
         end
       end
@@ -1886,13 +1703,11 @@ register_event('time change', function(new, old)
       elseif countdowns.vorseal == 0 then
 
         countdowns.vorseal = -1
-        local selected = selected_helper
-        local vorseal_text = helpers[selected.helper].vorseal_wearing
+            local vorseal_text = vana.vorseal_wearing
         if vorseal_text then
-          add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(vorseal_text):color(selected.c_text))
-
+          add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(vorseal_text):color(vana.info.text_color))
           playSound('vorseal_wearing')
-            end
+        end
 
       end
 
@@ -1926,13 +1741,11 @@ register_event('time change', function(new, old)
         --Only inform if reraise is not active and we are not in town
         if not reraiseActive() and (not reraise_check_not_in_town or (reraise_check_not_in_town and not isInTownZone())) then
 
-          local selected = selected_helper
-          local reraise_text = helpers[selected.helper].reraise_check
+                local reraise_text = vana.reraise_check
           if reraise_text then
-            add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..(reraise_text):color(selected.c_text))
-
+            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(reraise_text):color(vana.info.text_color))
             playSound('reraise_check')
-                end
+          end
 
         end
       end
@@ -1968,12 +1781,6 @@ register_event('addon command',function(addcmd, ...)
     end
     local last_check_date = getLastCheckDate()    
     local prefix = "//helper"
-    local helper_name = helpers[current_helper].info.name and helpers[current_helper].info.name or "Unknown"
-    local helper_type = helpers[current_helper].info.type and helpers[current_helper].info.type.." - " or "Unknown Type - "
-    local helper_description = helpers[current_helper].info.description or "No description available."
-    local helper_creator = helpers[current_helper].info.creator and " (Creator: "..helpers[current_helper].info.creator..")" or ""
-    local c_name = helpers[current_helper].info.name_color or 220
-    local c_text = helpers[current_helper].info.text_color or 1
     local canteen_ready = getKeyItemReady('canteen')
     local moglophone_ready = getKeyItemReady('moglophone')
     local plate_ready = getKeyItemReady('plate')
@@ -1983,36 +1790,27 @@ register_event('addon command',function(addcmd, ...)
     add_to_chat(8,(' Mystical Canteen: ')..(canteen_ready.text):color(canteen_ready.color))
     add_to_chat(8,(' Moglophone: ')..(moglophone_ready.text):color(moglophone_ready.color))
     add_to_chat(8,(' Ra\'Kaznarian Plate: ')..(plate_ready.text):color(plate_ready.color))
-    add_to_chat(8,voices and (' Voices Mode: '):color(8)..('On'):color(1) or (' ['..helper_name..'] '):color(c_name)..(helper_type..helper_description..helper_creator):color(c_text))
     add_to_chat(8,' ')
     add_to_chat(8,(' Command '):color(36)..('[optional] '):color(53)..('<required> '):color(2)..('- Description'):color(8))
     add_to_chat(8,' ')
     add_to_chat(8,(' sound/s '):color(36)..('- Switch sounds between Custom Helper, Default, or off.'):color(8))
   elseif addcmd == "sounds" or addcmd == "sound" or addcmd == "s" then
-    if sound_effects and custom_sounds then
-      settings.options.media.custom_sounds = false
-      custom_sounds = false
-      schedule_settings_save()
-      add_to_chat(8,('[Vana] '):color(220)..('Sound Mode: '):color(8)..('Default Sounds'):color(1))
-    elseif sound_effects then
+    if sound_effects then
       settings.options.sound_effects = false
       sound_effects = false
       schedule_settings_save()
-      add_to_chat(8,('[Vana] '):color(220)..('Sound Mode: '):color(8)..('Off'):color(1))
+      add_to_chat(8,('[Vana] '):color(220)..('Sound Mode: '):color(8)..('Off'):color(1):upper())
     else
       settings.options.sound_effects = true
       sound_effects = true
-      settings.options.media.custom_sounds = true
-      custom_sounds = true
       schedule_settings_save()
-      add_to_chat(8,('[Vana] '):color(220)..('Sound Mode: '):color(8)..('Custom Helper Sounds (if available)'):color(1))
+      add_to_chat(8,('[Vana] '):color(220)..('Sound Mode: '):color(8)..('On'):color(1):upper())
     end
 
   elseif addcmd == nil then
 
   elseif addcmd == "test" then
-    local selected = selected_helper
-    add_to_chat(selected.c_text,('['..selected.name..'] '):color(selected.c_name)..('This is a test notification!'):color(selected.c_text))
+    add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..('This is a test notification!'):color(vana.info.text_color))
     playSound('notification')
   else
     add_to_chat(8,('[Vana] '):color(220)..('Unrecognized command. Type'):color(8)..(' //helper help'):color(1)..(' for a list of commands.'):color(8))

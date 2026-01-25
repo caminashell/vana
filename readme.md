@@ -88,6 +88,7 @@ All commands must be preceded with `//helper` (ex: `//helper list`)
 |---------|-------------|
 | *(blank, no command)* | Cycle to the next loaded Helper. |
 | `help` | Display a list of commands and addon info. |
+| `sound/s` | Switch sounds between Custom Helper, Default, or off. |
 
 ## Options
 
@@ -117,7 +118,15 @@ Open the `/Helper/data/settings.xml` file to adjust these settings.
 
 Version 2.6.1-25b
 
-- Further performance optimisation of the addon to reduce impact to Windower Lua thread (system).
+- Further performance optimisation of the addon to reduce impact to Windower Lua thread (system):
+  - Moved prerender event body to time change event (prerender runs every frame, time change runs every second).
+- Removed helpers extension mappings as Vana is now a single-Helper addon.
+- Moved media folder to addon root location.
+- Removed cusrom sounds option.
+- Removed voices option.
+- Removed random helper on load option.
+- Removed redundant xml files.
+- Removed lingering TODOs.
 
 Version 2.6.1-22b
 
