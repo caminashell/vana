@@ -4,11 +4,11 @@
 
 _addon = {
   name = 'Vana (Helper)',
-  version = '2.6.1-22b',
+  version = '2.6.1-25b',
   author = 'key (keylesta@valefor), caminashell (avestara@asura)',
   command = {'vana'},
   commands = {'helper'},
-  description = 'An in-game notification assistant that provides helpful alerts, prompts, and reminders to enhance your gameplay experience in Final Fantasy XI. This Vana version is purposefully stripped-down to be a standalone alternate of the Helper addon by Keylesta. The original Helper addon contains many unecessary features that block the Windower Lua thread (which runs on the same thread that feeds data to the game), as well as frequent write-to-disk operations, and cause lag spikes, stuttering, and IO process overhead. This version focuses on core features only, and is optimized to minimize performance impact while still providing useful reminders and notifications.',
+  description = 'An in-game notification assistant that provides helpful alerts, prompts, and reminders to enhance your gameplay experience in Final Fantasy XI. See README for details.',
 }
 
 config = require('config')
@@ -35,7 +35,6 @@ play_sound = _w.play_sound
 send_command = _w.send_command
 
 defaults = {
-  addon_sha = nil,
   first_run = true,
   have_key_item = {
     canteen = {},
@@ -95,10 +94,6 @@ defaults = {
     check_party_for_low_mp = true,
     check_party_for_low_mp_delay_minutes = 15,
     current_helper = "vana",
-    flavor_text = true,
-    flavor_text_in_combat = false,
-    flavor_text_window_max_hours = 4,
-    flavor_text_window_min_hours = 2,
     helpers_loaded = {vana = true},
     introduce_on_load = true,
     key_item_reminders = {
@@ -162,43 +157,6 @@ vana = {
     name_color = 39,
     text_color = 220,
     type = "NPC",
-    sha = nil,
-  },
-  flavor_text = {
-    "You have a great sense of humor.",
-    "You're a great listener.",
-    "You light up the room.",
-    "Your creativity is inspiring.",
-    "You have a contagious smile.",
-    "Your positivity is infectious.",
-    "You bring out the best in people.",
-    "You have a heart of gold.",
-    "You're a wonderful friend.",
-    "Your enthusiasm is refreshing.",
-    "You're incredibly thoughtful.",
-    "You have a fantastic sense of lockstyle.",
-    "You always make people feel welcome.",
-    "You're full of great ideas.",
-    "You have an amazing work ethic.",
-    "Your confidence is inspiring.",
-    "You're always so helpful.",
-    "Your job mastery is impressive-you're a true expert!",
-    "You always know how to strategize perfectly in battle.",
-    "Your gear is top-notch; you really know how to optimize your character!",
-    "You're always there to back up the party when things get tough.",
-    "You make raids and missions look easy.",
-    "Your timing with abilities is flawless.",
-    "The way you handle aggro is amazing-you never let us down.",
-    "Your knowledge of the game is outstanding.",
-    "You're the glue that holds this alliance together.",
-    "Your dedication to leveling your job is truly inspiring.",
-    "Your DPS output is insane; you're a powerhouse in every fight.",
-    "You're so good at coordinating group tactics and keeping us organized.",
-    "The way you manage your macros is super smooth-never a missed step.",
-    "You always find the perfect balance between offense and defense.",
-    "Your ability to multi-task in intense fights is amazing.",
-    "You're always up for helping others; you're a true team player.",
-    "You look stunning in that lockstyle.",
   },
   ability_ready = "${ability} is ready to use again.",
   capped_job_points = "Your Job Points are now capped.",
@@ -243,7 +201,6 @@ current_helper = 'vana'
 c_name = nil
 c_text = nil
 
-addon_sha = settings.addon_sha
 first_run = settings.first_run
 have_key_item = settings.have_key_item
 key_item_ready = settings.key_item_ready
@@ -256,10 +213,6 @@ capped_merit_points = settings.options.notifications.capped_merit_points
 check_party_for_low_mp = settings.options.check_party_for_low_mp
 check_party_for_low_mp_delay_minutes = math.floor(settings.options.check_party_for_low_mp_delay_minutes * 60)
 custom_sounds = settings.options.media.custom_sounds
-flavor_text = settings.options.flavor_text
-flavor_text_in_combat = settings.options.flavor_text_in_combat
-flavor_text_window_max_hours = math.floor(settings.options.flavor_text_window_max_hours * 60 * 60)
-flavor_text_window_min_hours = math.floor(settings.options.flavor_text_window_min_hours * 60 * 60)
 food_wears_off = settings.options.notifications.food_wears_off
 helpers_loaded = settings.options.helpers_loaded
 introduce_on_load = settings.options.introduce_on_load
@@ -282,7 +235,6 @@ voices = settings.options.voices
 
 countdowns = {
   check_party_for_low_mp = 0,
-  flavor_text = math.floor(math.random(flavor_text_window_min_hours,flavor_text_window_max_hours)),
   mireu = 0,
   vorseal = -1,
   reraise = reraise_check_delay_minutes,
@@ -1037,28 +989,6 @@ function introduceHelper()
   else
     add_to_chat(8,('[Helper] '):color(220)..('Current Helper:'):color(8)..(capitalize(helpers[current_helper].name)):color(1)..('.'):color(8))
   end
-
-end
-
---Pick a random flavor text
-function flavorText(selected_helper)
-
-  local text = helpers[selected_helper].flavor_text
-
-  --Check if there are no flavor text entries for the current Helper
-  if not text or next(text) == nil then
-    return false
-  end
-  
-  local text_entries = {}
-
-  --Collect all entries in text into a list
-  for _, text in pairs(text) do
-    table.insert(text_entries, text)
-  end
-
-  --Return a random entry from the list
-  return text_entries[math.random(#text_entries)]
 
 end
 
@@ -1864,25 +1794,6 @@ register_event('prerender', function()
         check_party_for_low_mp_toggle = true
         checkPartyForLowMP()
 
-      end
-    end
-
-    --Countdown for Flavor text
-    if flavor_text then
-
-      if countdowns.flavor_text > 0 then
-
-        countdowns.flavor_text = countdowns.flavor_text - 1
-
-      elseif countdowns.flavor_text == 0 then
-
-        local in_combat = get_player().in_combat
-        local selected = getHelper()
-        local text = flavorText(selected.helper)
-        if text and not (not flavor_text_in_combat and in_combat) then
-          add_to_chat(selected.c_text, ('['..selected.name..'] '):color(selected.c_name)..(text):color(selected.c_text))
-          countdowns.flavor_text = math.floor(math.random(flavor_text_window_min_hours, flavor_text_window_max_hours))
-        end
       end
     end
 

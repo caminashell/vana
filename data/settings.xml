@@ -10,7 +10,7 @@
                 <avestara>true</avestara>
             </moglophone>
             <plate>
-                <avestara>true</avestara>
+                <avestara>false</avestara>
             </plate>
         </have_key_item>
         <key_item_ready>
@@ -21,7 +21,7 @@
                 <avestara>false</avestara>
             </moglophone>
             <plate>
-                <avestara>false</avestara>
+                <avestara>true</avestara>
             </plate>
         </key_item_ready>
         <options>
@@ -129,22 +129,22 @@
         </options>
         <timestamps>
             <canteen>
-                <avestara>1769155025</avestara>
+                <avestara>1769354044</avestara>
             </canteen>
             <last_check>1769014899</last_check>
             <mog_locker_expiration>
                 <avestara>1769471286</avestara>
             </mog_locker_expiration>
             <mog_locker_reminder>
-                <avestara>1769126400</avestara>
+                <avestara>1769378400</avestara>
             </mog_locker_reminder>
             <moglophone>
-                <avestara>1769155025</avestara>
+                <avestara>1769354044</avestara>
             </moglophone>
             <plate>
-                <avestara>1769155025</avestara>
+                <avestara>1769303644</avestara>
             </plate>
-            <sparkolades>1769256000</sparkolades>
+            <sparkolades>1769860800</sparkolades>
         </timestamps>
     </global>
 </settings>

@@ -4,49 +4,12 @@
         <ability_ready>${ability} is ready to use again.</ability_ready>
         <capped_job_points>Your Job Points are now capped.</capped_job_points>
         <capped_merit_points>Your Merit Points are now capped.</capped_merit_points>
-        <flavor_text>
-            <1>You have a great sense of humor.</1>
-            <10>Your enthusiasm is refreshing.</10>
-            <11>You&apos;re incredibly thoughtful.</11>
-            <12>You have a fantastic sense of lockstyle.</12>
-            <13>You always make people feel welcome.</13>
-            <14>You&apos;re full of great ideas.</14>
-            <15>You have an amazing work ethic.</15>
-            <16>Your confidence is inspiring.</16>
-            <17>You&apos;re always so helpful.</17>
-            <18>Your job mastery is impressive-you&apos;re a true expert!</18>
-            <19>You always know how to strategize perfectly in battle.</19>
-            <2>You&apos;re a great listener.</2>
-            <20>Your gear is top-notch; you really know how to optimize your character!</20>
-            <21>You&apos;re always there to back up the party when things get tough.</21>
-            <22>You make raids and missions look easy.</22>
-            <23>Your timing with abilities is flawless.</23>
-            <24>The way you handle aggro is amazing-you never let us down.</24>
-            <25>Your knowledge of the game is outstanding.</25>
-            <26>You&apos;re the glue that holds this alliance together.</26>
-            <27>Your dedication to leveling your job is truly inspiring.</27>
-            <28>Your DPS output is insane; you&apos;re a powerhouse in every fight.</28>
-            <29>You&apos;re so good at coordinating group tactics and keeping us organized.</29>
-            <3>You light up the room.</3>
-            <30>The way you manage your macros is super smooth-never a missed step.</30>
-            <31>You always find the perfect balance between offense and defense.</31>
-            <32>Your ability to multi-task in intense fights is amazing.</32>
-            <33>You&apos;re always up for helping others; you&apos;re a true team player.</33>
-            <34>You look stunning in that lockstyle.</34>
-            <4>Your creativity is inspiring.</4>
-            <5>You have a contagious smile.</5>
-            <6>Your positivity is infectious.</6>
-            <7>You bring out the best in people.</7>
-            <8>You have a heart of gold.</8>
-            <9>You&apos;re a wonderful friend.</9>
-        </flavor_text>
         <food_wears_off>Your food has worn off.</food_wears_off>
         <info>
             <description>Friendly, encouraging, and always positive.</description>
-            <introduction>I am Vana, your personal Helper.</introduction>
+            <introduction>I'll inform you of important in-game events and reminders to help enhance your gameplay experience. Let's embark on this adventure together!</introduction>
             <name>Vana</name>
             <name_color>220</name_color>
-            <sha>b5e048cc7a2428d8809da92e3d669a8854830456</sha>
             <text_color>8</text_color>
             <type>NPC</type>
         </info>
