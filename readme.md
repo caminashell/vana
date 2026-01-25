@@ -64,7 +64,7 @@ The result was this version that focuses on core (KISS) features only;
 >
 > [!NOTE]
 > It is not my intention to suggest that this version is better than the original, but it is a good alternative to the original.
-> The original Helper addon is a masterpiece of work and I commend its creator for the work he put into it.
+> The original Helper addon is a masterpiece of work and I commend its creator for the work they put into it.
 > But for my own personal use, I wanted to make a simpler, more performant, and more stable addon.
 
 ## History of Helper
