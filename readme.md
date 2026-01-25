@@ -41,6 +41,18 @@ After the DynaD session concluded, an investigation of the code was conducted to
 
 The original Helper addon contained many (fancy) sections of logic that as a result block the Windower Lua thread (which runs on the same thread that feeds data to the game). Frequent IO operations (disk read/write), repetitive global function calls; requests to remote destinations on the internet; causing lag spikes, stuttering, and IO process overhead. I was overly concerned about the performance impact of the addon, and wanted to make sure it wasn't a problem.
 
+Furthermore, a lot of heavy function calls being made from the prerender event, which runs every frame (60) per second, regardless of interval, was causing the addon to stress the Lua thread (and system as a whole).
+
+There are a lot of things that can be done to improve the addon's performance, but I wanted to keep it as simple as possible, and not add too many features that would make it more complex.
+
+- Garbage collection (GC) spikes are a problem.
+- Heavy use of os.clock() to determine time, which is CPU time, not wall time.
+- Expensive processing for party structure updates and recast checks.
+- Heavy use of Lua functions that are called frequently, such as get_party(), get_player(), get_info(), etc.
+- Not much use of coroutines or caching.
+- Overly large local functions and tables.
+- String.gsub in hot paths causing GC pressure.
+
 The result was this version that focuses on core (KISS) features only;
 
 - **introduction of a file cache** - Initialised once at load time and used for reference to negate frequest filesystem operations.
