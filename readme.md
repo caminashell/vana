@@ -1,7 +1,7 @@
 
 # Vana (Helper)
 
-`Vana Helper` is an in-game notification assistant that provides helpful alerts, prompts, and reminders to enhance your gameplay experience in Final Fantasy XI. This addon is a purposefully stripped-down alternate of the orginal `Helper (v2.3.2)` addon by Keylesta (see [History of Helper](#history-of-helper)).
+`Vana Helper` is an in-game notification assistant that provides helpful alerts, prompts, and reminders to enhance your gameplay experience in Final Fantasy XI. This addon is a purposefully stripped-down alternate of the orginal `Helper (v2.3.2)` addon by Keylesta (see [History of Helper](#history-of-helper)), optimised for performance and stability.
 
 >
 > [!CAUTION]
