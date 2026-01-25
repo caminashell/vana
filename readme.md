@@ -5,7 +5,7 @@
 
 >
 > [!CAUTION]
-> This project is currently in a development state and is not ready for reliableuse.
+> This project is currently in a development state and is not ready for reliable use.
 > You may download and use it, but it is not recommended until I have actually created a release.
 
 ## Core Features
