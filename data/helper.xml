@@ -1,0 +1,12 @@
+<?xml version="1.1" ?>
+<settings>
+    <global>
+        <vana>
+            <description>Friendly, encouraging, and always positive.</description>
+            <name>Vana</name>
+            <name_color>220</name_color>
+            <text_color>8</text_color>
+            <type>Fictional</type>
+        </vana>
+    </global>
+</settings>
