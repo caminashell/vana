@@ -61,7 +61,9 @@ The result was this version that focuses on core (KISS) features only;
 - **removal of the helper extensions** - they aren't needed, as Vana does the job.
 - ... and a few more logic optimisations to minimize performance impact.
 
-It is not my intention to suggest that this version is better than the original, but it is a good alternative to the original.
+>
+> [!NOTE]
+> It is not my intention to suggest that this version is better than the original, but it is a good alternative to the original.
 
 ## History of Helper
 
