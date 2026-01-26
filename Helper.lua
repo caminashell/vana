@@ -1,22 +1,17 @@
--- TODO: Localise repeated global patterns at the top of the file for performance.
 -- TODO: Localise functions that are called frequently.
 -- TODO: Move function calls out of prerender, even with interval, checks every frame (60), spiking CPU every ~1s for GC.
 -- TODO: Feature: Implement Besieged message alert.
 -- TODO: Feature: Implement current job checks for chat alerts (e.g., Looking for WHM, etc).
 -- TODO: Feature: Daily/Weekly task reset notices (Oseem, ROE, Monberaux, Sortie, Odyssey, Domain, etc).
 
---[[
-
-NOTES: ------ THIS PROJECT IS IN DEVELOPMENT, NOT READY FOR USE ------
-
-]]--
+--[[ === THIS PROJECT IS IN DEVELOPMENT, NOT READY FOR USE === ]]--
 
 _addon = {
   name = 'Vana (Helper)',
-  version = '2.6.1-25b',
+  version = '2.6.1-26b',
   author = 'key (keylesta@valefor), caminashell (avestara@asura)',
   commands = {'helper', 'vana'},
-  description = 'An in-game notification assistant that provides helpful alerts, prompts, and reminders to enhance your gameplay experience in Final Fantasy XI. See README for details.',
+  description = 'An assistant that provides helpful event alerts and reminders to enhance experience in Final Fantasy XI. See README for details.',
 }
 
 config = require('config')
@@ -26,21 +21,21 @@ images = require('images')
 require 'chat'
 math.randomseed(os.time())
 
--- [[ === DEFINITIONS === ]] ---
+--[[ === DEFINITIONS === ]]---
 
-_w = windower
-addon_path = _w.addon_path
-add_to_chat = _w.add_to_chat
-get_ability_recasts = _w.ffxi.get_ability_recasts
-get_dir = _w.get_dir
-get_info = _w.ffxi.get_info
-get_key_items = _w.ffxi.get_key_items
-get_party = _w.ffxi.get_party
-get_player = _w.ffxi.get_player
-register_event = _w.register_event
-play_sound = _w.play_sound
+local _w = windower
+local addon_path = _w.addon_path
+local add_to_chat = _w.add_to_chat
+local get_ability_recasts = _w.ffxi.get_ability_recasts
+local get_dir = _w.get_dir
+local get_info = _w.ffxi.get_info
+local get_key_items = _w.ffxi.get_key_items
+local get_party = _w.ffxi.get_party
+local get_player = _w.ffxi.get_player
+local register_event = _w.register_event
+local play_sound = _w.play_sound
 
-defaults = {
+local defaults = {
   first_run = true,
   have_key_item = {
     canteen = {},
@@ -147,7 +142,7 @@ defaults = {
   },
 }
 
-vana = {
+local vana = {
   info = {
     name = "Vana",
     introduction = "I'll inform you of events and reminders to help enhance your experience!",
@@ -186,45 +181,48 @@ vana = {
   you_are_now_party_leader = "You are now the party leader.",
 }
 
-settings = config.load(defaults)
+local settings = config.load(defaults)
 
-first_run = settings.first_run
-have_key_item = settings.have_key_item
-key_item_ready = settings.key_item_ready
-timestamps = settings.timestamps
+local first_run = settings.first_run
+local have_key_item = settings.have_key_item
+local key_item_ready = settings.key_item_ready
+local timestamps = settings.timestamps
+local opt = settings.options
 
-ability_ready = settings.options.ability_ready
-after_zone_party_check_delay_seconds = math.floor(settings.options.after_zone_party_check_delay_seconds)
-capped_job_points = settings.options.notifications.capped_job_points
-capped_merit_points = settings.options.notifications.capped_merit_points
-check_party_for_low_mp = settings.options.check_party_for_low_mp
-check_party_for_low_mp_delay_minutes = math.floor(settings.options.check_party_for_low_mp_delay_minutes * 60)
-food_wears_off = settings.options.notifications.food_wears_off
-introduce_on_load = settings.options.introduce_on_load
-key_item_reminders = settings.options.key_item_reminders
-mireu_popped = settings.options.notifications.mireu_popped
-mog_locker_expiring = settings.options.notifications.mog_locker_expiring
-party_announcements = settings.options.party_announcements
-reraise_check = settings.options.reraise_check
-reraise_check_delay_minutes = math.floor(settings.options.reraise_check_delay_minutes * 60)
-reraise_check_not_in_town = settings.options.reraise_check_not_in_town
-reraise_wears_off = settings.options.notifications.reraise_wears_off
-signet_wears_off = settings.options.notifications.signet_wears_off
-sound_effects = settings.options.media.sound_effects
-sparkolade_reminder = settings.options.sparkolade_reminder
-sparkolade_reminder_day = settings.options.sparkolade_reminder_day
-sparkolade_reminder_time = settings.options.sparkolade_reminder_time
-sublimation_charged = settings.options.notifications.sublimation_charged
-vorseal_wearing = settings.options.notifications.vorseal_wearing
+local ability_ready = opt.ability_ready
+local after_zone_party_check_delay_seconds = math.floor(opt.after_zone_party_check_delay_seconds)
+local check_party_for_low_mp = opt.check_party_for_low_mp
+local check_party_for_low_mp_delay_minutes = math.floor(opt.check_party_for_low_mp_delay_minutes * 60)
+local introduce_on_load = opt.introduce_on_load
+local key_item_reminders = opt.key_item_reminders
+local ntf = opt.notifications
+local party_announcements = opt.party_announcements
+local reraise_check = opt.reraise_check
+local reraise_check_delay_minutes = math.floor(opt.reraise_check_delay_minutes * 60)
+local reraise_check_not_in_town = opt.reraise_check_not_in_town
+local sound_effects = opt.media.sound_effects
+local sparkolade_reminder = opt.sparkolade_reminder
+local sparkolade_reminder_day = opt.sparkolade_reminder_day
+local sparkolade_reminder_time = opt.sparkolade_reminder_time
 
-countdowns = {
+local capped_job_points = ntf.capped_job_points
+local capped_merit_points = ntf.capped_merit_points
+local food_wears_off = ntf.food_wears_off
+local mireu_popped = ntf.mireu_popped
+local mog_locker_expiring = ntf.mog_locker_expiring
+local reraise_wears_off = ntf.reraise_wears_off
+local signet_wears_off = ntf.signet_wears_off
+local sublimation_charged = ntf.sublimation_charged
+local vorseal_wearing = ntf.vorseal_wearing
+
+local countdowns = {
   check_party_for_low_mp = 0,
   mireu = 0,
   vorseal = -1,
   reraise = reraise_check_delay_minutes,
 }
 
-ready = {
+local ready = {
   bestial_loyalty = true,
   blaze_of_glory = true,
   call_wyvern = true,
@@ -259,7 +257,7 @@ ready = {
   troubadour = true,
 }
 
-ability_name = {
+local ability_name = {
   bestial_loyalty = "Bestial Loyalty",
   blaze_of_glory = "Blaze of Glory",
   call_wyvern = "Call Wyvern",
@@ -294,33 +292,33 @@ ability_name = {
   troubadour = "Troubadour",
 }
 
-recast = {}
-party_structure = {}
-heartbeat = 0
-in_party = false
-in_alliance = false
-party_leader = false
-alliance_leader = false
-limit_points = 0
-merit_points = 0
-max_merit_points = 0
-capped_merits = true
-cap_points = 0
-job_points = 500
-capped_jps = true
-check_party_for_low_mp_toggle = true
-zoned = false
-paused = false
-alive = true
-media_folder = addon_path.."media/"
+local recast = {}
+local party_structure = {}
+local heartbeat = 0
+local in_party = false
+local in_alliance = false
+local party_leader = false
+local alliance_leader = false
+local limit_points = 0
+local merit_points = 0
+local max_merit_points = 0
+local capped_merits = true
+local cap_points = 0
+local job_points = 500
+local capped_jps = true
+local check_party_for_low_mp_toggle = true
+local zoned = false
+local paused = false
+local alive = true
+local media_folder = addon_path.."media/"
 
-_save_scheduled = false
-sound_cache = {}
-placeholder_cache = {}
-last_party_check = 0
-party_check_interval = 1.0 -- seconds
+local _save_scheduled = false
+local sound_cache = {}
+local placeholder_cache = {}
+local last_party_check = 0
+local party_check_interval = 1.0 -- seconds
 
--- [[ === CORE FUNCTIONS === ]] ---
+--[[ === CORE FUNCTIONS === ]]---
 
 -- Debounced settings save, replacing immediate saves.
 -- Reduces IO load and CPU load.
@@ -467,7 +465,6 @@ function firstRun()
 end
 
 -- Play the correct sound
--- !! Added Debouncing to prevent sound spamming & hitching due to IO load
 function playSound(sound_name)
 
   if not sound_effects then return end
@@ -1246,7 +1243,7 @@ function trackPartyStructure()
 
 end
 
--- [[ === WINDOWER EVENTS === ]] --
+--[[ === WINDOWER EVENTS === ]]--
 
 -- Load
 register_event('load', function()
@@ -1346,13 +1343,13 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
     end
 
   elseif id == 0xB then -- Zone start
-    if get_info().logged_in then
+    if get_info().logged_in and not zoned then
       zoned = true
       paused = true
     end
 
   elseif id == 0xA then -- Zone finish
-    if get_info().logged_in then
+    if get_info().logged_in and zoned then
       zoned = false
       -- Short delay after zoning to prevent "left...joined" messages after every zone.
       coroutine.schedule(function()
@@ -1634,7 +1631,15 @@ register_event('job change', function()
 
 end)
 
--- Main time change event (1 second heartbeat)
+-- Main time change event
+-- ! "prerender" runs every frame (60) per second, stressing the lua thread.
+-- !   Due to the heavy function calls and table processing, with little to no
+-- !   update/refresh to UI components, this requirement isn't optimal.
+-- ! "time change" runs when the in-game world time changes (every ~3s).
+-- !   Resulting in:
+-- !     a much reduced polling rate & CPU time
+-- !     less stress on the lua thread
+-- !     less pressure on garbage collector
 register_event('time change', function(new, old)
 
   local logged_in = get_info().logged_in
@@ -1694,7 +1699,7 @@ register_event('time change', function(new, old)
 
         countdowns.check_party_for_low_mp = countdowns.check_party_for_low_mp - 1
 
-      elseif countdowns.check_party_for_low_mp == 0 then
+      elseif countdowns.check_party_for_low_mp == 0 and not check_party_for_low_mp_toggle then
 
         check_party_for_low_mp_toggle = true
         checkPartyForLowMP()
@@ -1857,29 +1862,34 @@ register_event('addon command',function(addcmd, ...)
   end
 end)
 
---Copyright (c) 2025, Key
---Copyright (c) 2026, Caminashell
---All rights reserved.
+--[[
 
---Redistribution and use in source and binary forms, with or without
---modification, are permitted provided that the following conditions are met:
+Copyright (c) 2025, Key
+Copyright (c) 2026, Caminashell
 
---    * Redistributions of source code must retain the above copyright
---      notice, this list of conditions and the following disclaimer.
---    * Redistributions in binary form must reproduce the above copyright
---      notice, this list of conditions and the following disclaimer in the
---      documentation and/or other materials provided with the distribution.
---    * Neither the name of Helper nor the
---      names of its contributors may be used to endorse or promote products
---      derived from this software without specific prior written permission.
+All rights reserved.
 
---THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
---ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
---WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
---DISCLAIMED. IN NO EVENT SHALL Key BE LIABLE FOR ANY
---DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
---(INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
---LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
---ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
---(INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
---SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+    * Redistributions of source code must retain the above copyright
+      notice, this list of conditions and the following disclaimer.
+    * Redistributions in binary form must reproduce the above copyright
+      notice, this list of conditions and the following disclaimer in the
+      documentation and/or other materials provided with the distribution.
+    * Neither the name of Helper nor the
+      names of its contributors may be used to endorse or promote products
+      derived from this software without specific prior written permission.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND
+ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
+WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL Key BE LIABLE FOR ANY DIRECT, INDIRECT,
+INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF
+LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE
+OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF
+ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
+]]--

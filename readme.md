@@ -1,7 +1,7 @@
 
 # Vana (Helper)
 
-`Vana Helper` is an in-game notification assistant that provides helpful alerts, prompts, and reminders to enhance your gameplay experience in Final Fantasy XI. This addon is a purposefully stripped-down alternate of the orginal `Helper (v2.3.2)` addon by Keylesta (see [History of Helper](#history-of-helper)), optimised for performance and stability.
+`Vana` is an assistant that provides helpful event alerts and reminders to enhance experience in Final Fantasy XI. This addon is a purposefully stripped-down alternate of the orginal `Helper (v2.3.2)` addon by Keylesta (see [History of Helper](#history-of-helper)), optimised for performance and stability.
 
 >
 > [!CAUTION]
@@ -81,7 +81,7 @@ For more info, see the [original Helper addon](https://github.com/iLVL-Key/FFXI/
 
 ## Commands
 
-All commands must be preceded with `//helper`
+All commands must be preceded with  `//vana` or `//helper`
 `<required>` `[optional]`
 
 | Command | Description |
@@ -115,6 +115,17 @@ Open the `/Helper/data/settings.xml` file to adjust these settings.
 ------
 
 ## Changelog
+
+Version 2.6.1-26b
+
+- Localised definitions.
+- Checks for zoned state.
+- Checks for low mp state.
+- Textual amendments.
+- Minor housekeeping.
+- Correct event misconcept (dev notes).
+- Memory usage appears to be stable and acceptable.
+- Continued performance testing & optimisation.
 
 Version 2.6.1-25b
 
