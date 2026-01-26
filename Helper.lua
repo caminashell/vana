@@ -1640,6 +1640,8 @@ end)
 -- !     a much reduced polling rate & CPU time
 -- !     less stress on the lua thread
 -- !     less pressure on garbage collector
+-- TODO: This could still mean hitching experienced every 3 seconds...
+-- TODO: Investigate performance of processes in this event.
 register_event('time change', function(new, old)
 
   local logged_in = get_info().logged_in
