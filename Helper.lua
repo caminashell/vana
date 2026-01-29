@@ -1734,7 +1734,7 @@ register_event('addon command',function(addcmd, ...)
 
   if addcmd == 'help' or addcmd == nil then
 
-    player = player orget_player()
+    player = player or get_player()
 
     local function getLastCheckDate()
 
