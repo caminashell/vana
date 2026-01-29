@@ -116,6 +116,11 @@ Open the `/Helper/data/settings.xml` file to adjust these settings.
 
 ## Changelog
 
+Version 2.6.1-29b
+
+- Added debug & performance monitoring.
+- Moved some logic from heartbeat (time change) event to function calls.
+
 Version 2.6.1-26b
 
 - Localised definitions.

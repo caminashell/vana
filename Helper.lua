@@ -8,7 +8,7 @@
 
 _addon = {
   name = 'Vana (Helper)',
-  version = '2.6.1-26b',
+  version = '2.6.1-29b',
   author = 'key (keylesta@valefor), caminashell (avestara@asura)',
   commands = {'helper', 'vana'},
   description = 'An assistant that provides helpful event alerts and reminders to enhance experience in Final Fantasy XI. See README for details.',
@@ -54,7 +54,7 @@ local defaults = {
     mog_locker_expiration = {},
     mog_locker_reminder = {},
     plate = {},
-    sparkolades = 0,
+    sparkss = 0,
   },
   options = {
     ability_ready = {
@@ -136,9 +136,9 @@ local defaults = {
     reraise_check = true,
     reraise_check_delay_minutes = 60,
     reraise_check_not_in_town = true,
-    sparkolade_reminder = true,
-    sparkolade_reminder_day = "Saturday",
-    sparkolade_reminder_time = 1200,
+    sparks_reminder = true,
+    sparks_reminder_day = "Saturday",
+    sparks_reminder_time = 1200,
   },
 }
 
@@ -161,7 +161,7 @@ local vana = {
   reraise_check = "You do not have Reraise on.",
   reraise_wears_off = "Your Reraise effect has worn off.",
   signet_wears_off = "Your ${signet} effect has worn off.",
-  sparkolade_reminder = "Don't forget to spend your Sparkolades.",
+  sparks_reminder = "Don't forget to spend your Sparkss.",
   sublimation_charged = "Sublimation is now fully charged and ready to use.",
   mireu_popped = "Mireu was just mentioned in ${zone}.",
   member_joined_party = "${member} has joined the party.",
@@ -201,9 +201,9 @@ local reraise_check = opt.reraise_check
 local reraise_check_delay_minutes = math.floor(opt.reraise_check_delay_minutes * 60)
 local reraise_check_not_in_town = opt.reraise_check_not_in_town
 local sound_effects = opt.media.sound_effects
-local sparkolade_reminder = opt.sparkolade_reminder
-local sparkolade_reminder_day = opt.sparkolade_reminder_day
-local sparkolade_reminder_time = opt.sparkolade_reminder_time
+local sparks_reminder = opt.sparks_reminder
+local sparks_reminder_day = opt.sparks_reminder_day
+local sparks_reminder_time = opt.sparks_reminder_time
 
 local capped_job_points = ntf.capped_job_points
 local capped_merit_points = ntf.capped_merit_points
@@ -257,7 +257,7 @@ local ready = {
   troubadour = true,
 }
 
-local ability_name = {
+local abilities = {
   bestial_loyalty = "Bestial Loyalty",
   blaze_of_glory = "Blaze of Glory",
   call_wyvern = "Call Wyvern",
@@ -292,6 +292,9 @@ local ability_name = {
   troubadour = "Troubadour",
 }
 
+local logged_in = get_info().logged_in
+local player = get_player()
+
 local recast = {}
 local party_structure = {}
 local heartbeat = 0
@@ -318,11 +321,35 @@ local placeholder_cache = {}
 local last_party_check = 0
 local party_check_interval = 1.0 -- seconds
 
+local debug_mode = false
+local monitor_mode = false
+
 --[[ === CORE FUNCTIONS === ]]---
+
+-- Print debug messages to console if debug mode is enabled (default: false)
+local function print_debug(msg)
+  if debug_mode then
+    print('[DEBUG] '..msg)
+  end
+end
+
+-- Print rough profiling to console if monitor mode is enabled (default: false)
+local function monitor(name, fn, ...)
+  if not monitor_mode then
+    return fn(...)
+  else
+    local start = os.clock()
+    local results = { fn(...) }
+    local mem_usage = collectgarbage("count")
+    print('[MONITOR] '..name.." took "..os.clock() - start.."s."..string.format(" Memory usage: %.2f KB", mem_usage))
+    return unpack(results)
+  end
+end
 
 -- Debounced settings save, replacing immediate saves.
 -- Reduces IO load and CPU load.
 local function schedule_settings_save(delay)
+  print_debug( 'Scheduling settings save...') -- Debug line, can be removed later
   if _save_scheduled then return end
   _save_scheduled = true
   delay = delay or 5
@@ -335,6 +362,7 @@ end
 -- Sound / file cache (built once, at load time)
 -- Reduces filesystem reads and CPU load.
 local function build_sound_cache()
+  print_debug( 'Building sound cache...') -- Debug line, can be removed later
   sound_cache = {}
   -- scan media_folder and helper folders once
   local files = get_dir(media_folder) or {}
@@ -345,6 +373,7 @@ end
 
 -- TODO: Optimize placeholder replacement with caching (unfinished/unused)
 local function format_message(template, key)
+  print_debug( 'Formatting message...') -- Debug line, can be removed later
   local cache_key = template .. (key or '')
   if placeholder_cache[cache_key] then return placeholder_cache[cache_key] end
   local result = template:gsub('%${member}', key or '') -- expand as needed
@@ -352,57 +381,11 @@ local function format_message(template, key)
   return result
 end
 
--- Determine starting states
-function initialize()
-  -- Localise repeated global patterns
-  -- Should not be calling get_abc() multiple times.
-  local party = get_party()
-  local player = get_player()
-
-  if not player then return end
-
-  limit_points = 0
-  merit_points = 0
-  max_merit_points = 0
-  capped_merits = true
-  cap_points = 0
-  job_points = 500
-  capped_jps = true
-
-  --Update the party/alliance structure
-  party_structure = updatePartyStructure()
-  in_alliance = false
-  if party.alliance_leader then
-    in_alliance = true
-    in_party = true
-    if party.alliance_leader == player.id then
-      alliance_leader = true
-      party_leader = true
-    end
-  end
-  if not in_alliance then
-    in_party = false
-    if party.party1_leader then
-      in_party = true
-      if party.party1_leader == player.id then
-        party_leader = true
-      end
-    end
-  end
-  paused = false
-
-  --Check if we've passed the Sparkolade reminder timestamp while logged out
-  coroutine.schedule(function()
-    checkSparkoladeReminder()
-  end, 5)
-
-end
-
 -- Update the party/alliance structure
 -- !! This function creates a new table every time and therefore triggers GC a lot.
 -- !! Examine reusing the same table over time.
 function updatePartyStructure()
-
+  print_debug( 'Updating party structure...') -- Debug line, can be removed later
 	-- Get the current party data
 	local current_party = get_party()
 
@@ -448,7 +431,7 @@ function updatePartyStructure()
 end
 
 function firstRun()
-
+  print_debug( 'Checking first run...') -- Debug line, can be removed later
   -- Exit if this isn't the first run
   if not first_run then return end
 
@@ -466,7 +449,7 @@ end
 
 -- Play the correct sound
 function playSound(sound_name)
-
+  print_debug( 'Playing sound...') -- Debug line, can be removed later
   if not sound_effects then return end
 
   local file_name = sound_name..".wav"
@@ -491,9 +474,9 @@ function playSound(sound_name)
 
 end
 
--- Set the Sparkolade reminder timestamp
-function setSparkoladeReminderTimestamp()
-
+-- Set the Sparks reminder timestamp
+function setSparksReminderTimestamp()
+  print_debug( 'Setting Sparks reminder timestamp...') -- Debug line, can be removed later
   local days_of_week = {
     sunday = 1, sun = 1, su = 1,
     monday = 2, mon = 2, mo = 2,
@@ -505,8 +488,8 @@ function setSparkoladeReminderTimestamp()
   }
 
   -- Get user-configured day and time, default to "Saturday 12:00"
-  local day_input = (sparkolade_reminder_day or "Saturday"):lower()
-  local time_input = tonumber(sparkolade_reminder_time) or 1200
+  local day_input = (sparks_reminder_day or "Saturday"):lower()
+  local time_input = tonumber(sparks_reminder_time) or 1200
 
   -- Convert the input day to a numeric day of the week
   local target_day = days_of_week[day_input]
@@ -557,50 +540,52 @@ function setSparkoladeReminderTimestamp()
 
   -- Save the new timestamp
   settings.timestamps = settings.timestamps or {}
-  settings.timestamps.sparkolades = reminder_time
+  settings.timestamps.sparkss = reminder_time
   schedule_settings_save()
 
 end
 
--- Check if the Sparkolade reminder should be triggered (called once per minute)
-function checkSparkoladeReminder()
-
-  if not sparkolade_reminder or not settings.timestamps or not settings.timestamps.sparkolades then
+-- Check if the Sparks reminder should be triggered (called once per minute)
+function checkSparksReminder()
+  print_debug( 'Checking Sparks reminder...') -- Debug line, can be removed later
+  if not sparks_reminder or not settings.timestamps or not settings.timestamps.sparkss then
     return
   end
 
   local current_time = os.time()
 
   --Check if the reminder time has passed
-  if current_time >= settings.timestamps.sparkolades then
+  if current_time >= settings.timestamps.sparkss then
 
-    if settings.timestamps.sparkolades ~= 0 then
+    if settings.timestamps.sparkss ~= 0 then
 
-      local text = vana.sparkolade_reminder
+      local text = vana.sparks_reminder
       if text then
 
         add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
 
-        playSound('sparkolade_reminder')
+        playSound('sparks_reminder')
 
       end
 
     end
 
     --Set the next reminder
-    setSparkoladeReminderTimestamp()
+    setSparksReminderTimestamp()
 
   end
 end
 
 -- Save the time of the last check
 function saveLastCheckTime()
+  print_debug( 'Saving last check time...') -- Debug line, can be removed later
   timestamps.last_check = os.time()
   schedule_settings_save()
 end
 
 -- Save the current timestamp for a key item
 function saveReminderTimestamp(key_item, key_item_reminder_repeat_hours)
+  print_debug( 'Saving reminder timestamp...') -- Debug line, can be removed later
   if not key_item then
     return
   end
@@ -618,6 +603,7 @@ end
 
 -- Check if the player has a key item
 function haveKeyItem(key_item_id)
+  print_debug( 'Checking for key item...') -- Debug line, can be removed later
   if not key_item_id then
     return false
   end
@@ -637,7 +623,7 @@ end
 
 -- Check if a key item reminder should be triggered (called every heartbeat (1s))
 function checkKIReminderTimestamps()
-
+  print_debug( 'Checking key item reminders...') -- Debug line, can be removed later
   --List of tracked key items
   local tracked_items = { canteen = 3137, moglophone = 3212, plate = 3300 }
 
@@ -695,7 +681,7 @@ end
 
 -- Check if the Mog Locker expiration reminder should be triggered (called once per hour)
 function checkMogLockerReminder()
-
+  print_debug( 'Checking Mog Locker reminder...') -- Debug line, can be removed later
   if not mog_locker_expiring then
     return
   end
@@ -737,7 +723,7 @@ end
 
 -- Check if the player is in a town zone
 function isInTownZone()
-
+  print_debug( 'Checking if in town zone...') -- Debug line, can be removed later
   local current_zone = res.zones[get_info().zone].name
   local town_zones = {
     'Western Adoulin','Eastern Adoulin','Celennia Memorial Library','Silver Knife','Bastok Markets','Bastok Mines','Metalworks','Port Bastok','Chateau d\'Oraguille','Northern San d\'Oria','Port San d\'Oria','Southern San d\'Oria','Heavens Tower','Port Windurst','Windurst Walls','Windurst Waters','Windurst Woods','Lower Jeuno','Port Jeuno','Ru\'Lude Gardens','Upper Jeuno','Aht Urhgan Whitegate','The Colosseum','Tavnazian Safehold','Southern San d\'Oria [S]','Bastok Markets [S]','Windurst Waters [S]','Mhaura','Selbina','Rabao','Kazham','Norg','Nashmau','Mog Garden','Leafallia','Chocobo Circuit'
@@ -760,7 +746,7 @@ end
 
 -- Capitalize first letter
 function capitalize(str)
-
+  print_debug( 'Capitalizing string...') -- Debug line, can be removed later
   str = string.gsub(str, "(%w)(%w*)", function(firstLetter, rest)
     return string.upper(firstLetter)..string.lower(rest)
   end)
@@ -771,7 +757,7 @@ end
 
 -- Introduce the Helper
 function introduceHelper()
-
+  print_debug( 'Introducing helper...') -- Debug line, can be removed later
   local introduction = vana.info.introduction
 
   if introduction then
@@ -784,6 +770,7 @@ end
 
 -- Update recast timers (called every heartbeat (1s))
 function updateRecasts()
+  print_debug( 'Updating recasts...') -- Debug line, can be removed later
 
   local ability_recast = get_ability_recasts()
 
@@ -823,7 +810,7 @@ end
 
 -- Party MP checks (called every heartbeat (1s))
 function checkPartyForLowMP()
-
+  print_debug( 'Checking party MP...') -- Debug line, can be removed later
   local player_job = get_player().main_job
 
   --Replace redresh placeholders
@@ -883,7 +870,7 @@ end
 
 -- Replace the ability placeholders (potential call every heartbeat (1s))
 function abilityPlaceholders(text, ability)
-
+  print_debug( 'Replacing ability placeholders...') -- Debug line, can be removed later
   local player_job = get_player().main_job
 
   local SP1 = {
@@ -908,7 +895,7 @@ function abilityPlaceholders(text, ability)
     RUN = "Odyllic Subterfuge"
   }
 
-  local ability_name
+  -- local ability_name
 
   if ability == "SP1" then
     ability_name = SP1[player_job]
@@ -924,7 +911,7 @@ end
 
 -- Helper function to create a table of member names for a given set of positions
 function getMemberNames(structure, positions)
-
+  print_debug( 'Getting member names...') -- Debug line, can be removed later
   local members = members or {}
 
   for _, position in ipairs(positions) do
@@ -939,7 +926,7 @@ end
 
 -- Helper function to find the difference between two tables of member names
 function findDifferences(old_members, new_members)
-
+  print_debug( 'Finding differences between member lists...') -- Debug line, can be removed later
   local changes = changes or {}
   changes.added = {}
   changes.removed = {}
@@ -975,6 +962,7 @@ end
 
 -- Compare party/alliance structure
 function trackPartyStructure()
+  print_debug( 'Tracking party/alliance structure.') -- Debug line, can be removed later
   -- Debounce/Throttle heavy handler
   local now = os.clock()
   if now - last_party_check < party_check_interval then return end
@@ -1243,9 +1231,143 @@ function trackPartyStructure()
 
 end
 
+function checkAbilityReadyNotifications()
+  print_debug( 'Checking abilities...') -- Debug line, can be removed later
+
+  -- Check if abilities are ready
+  for ability, enabled in pairs(ability_ready) do
+    if enabled then
+      if recast[ability] and recast[ability] > 0 and ready[ability] then
+        ready[ability] = false
+      elseif recast[ability] == 0 and not ready[ability] then
+        local msg = vana.ability_ready
+        if msg then
+          msg = abilityPlaceholders(msg, abilities[ability])
+          add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
+          playSound('ability_ready')
+          ready[ability] = true
+        end
+      end
+    end
+  end
+end
+
+function countdownForPartyForLowMPChecks(player_job)
+  print_debug( 'Checking party MP...') -- Debug line, can be removed later
+
+  -- Coutdown for checking party for low mp
+  if check_party_for_low_mp and (player_job == 'RDM' or player_job == 'BRD') then
+    if countdowns.check_party_for_low_mp > 0 then
+      countdowns.check_party_for_low_mp = countdowns.check_party_for_low_mp - 1
+    elseif countdowns.check_party_for_low_mp == 0 and not check_party_for_low_mp_toggle then
+      check_party_for_low_mp_toggle = true
+      checkPartyForLowMP()
+    end
+  end
+end
+
+function countdownForVorsealChecks()
+  print_debug( 'Checking Vorseal...') -- Debug line, can be removed later
+
+  -- Coutdown for checking Vorseal
+  if check_vorseal_reminder and vorseal_wearing then
+    if countdowns.vorseal > 0 then
+      countdowns.vorseal = countdowns.vorseal - 1
+    elseif countdowns.vorseal == 0 and not vorseal_wearing then
+      vorseal_wearing = true
+      checkVorsealReminder()
+    end
+  end
+end
+
+function countdownForReraiseChecks()
+  print_debug( 'Checking Reraise...') -- Debug line, can be removed later
+
+  -- Countdown for Reraise Check
+  if reraise_check and player.vitals.hp ~= 0 then
+    if countdowns.reraise > 0 then
+      countdowns.reraise = countdowns.reraise - 1
+    elseif countdowns.reraise == 0 then
+      countdowns.reraise = reraise_check_delay_minutes
+
+      -- Check if we have reraise active
+      local function reraiseActive()
+        local buffs = get_player().buffs
+        for _, buffId in ipairs(buffs) do
+          if buffId == 113 then
+            return true
+          end
+        end
+        return false
+      end
+
+      -- Only inform if reraise is not active and we are not in town
+      -- !! This might be a gotcha due to DynamisD might need reraise to be active
+      if not reraiseActive() and (not reraise_check_not_in_town or (reraise_check_not_in_town and not isInTownZone())) then
+        local msg = vana.reraise_check
+        if msg then
+          add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
+          playSound('reraise_check')
+        end
+      end
+    end
+  end
+end
+
+-- Determine starting states on load / login
+function initialize()
+  print_debug('Initializing...') -- Debug line, can be removed later
+  -- Localise repeated global patterns
+  -- Should not be calling get_abc() multiple times.
+  local party = get_party()
+  local player = get_player()
+
+  if not player then return end
+
+  -- Reset points on load / login
+  limit_points = 0
+  merit_points = 0
+  max_merit_points = 0
+  capped_merits = true
+  cap_points = 0
+  job_points = 500
+  capped_jps = true
+
+  -- Update the party/alliance structure
+  party_structure = updatePartyStructure()
+  in_alliance = false
+
+  if party.alliance_leader then
+    in_alliance = true
+    in_party = true
+    if party.alliance_leader == player.id then
+      alliance_leader = true
+      party_leader = true
+    end
+  end
+
+  if not in_alliance then
+    in_party = false
+    if party.party1_leader then
+      in_party = true
+      if party.party1_leader == player.id then
+        party_leader = true
+      end
+    end
+  end
+
+  paused = false
+
+  -- Check if we've passed the Sparks reminder timestamp while logged out
+  coroutine.schedule(function()
+    checkSparksReminder()
+  end, 5)
+
+end
+
 --[[ === WINDOWER EVENTS === ]]--
 
--- Load
+-- Load / Reload
 register_event('load', function()
 
   if get_info().logged_in then
@@ -1319,6 +1441,7 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
       local job = player.main_job_full
       cap_points = packet[job..' Capacity Points'] or cap_points
       job_points = packet[job..' Job Points'] or job_points
+      add_to_chat(8, 'Limit Points: '..limit_points..', Merit Points: '..merit_points..'/'..max_merit_points..', '..job..' Capacity Points: '..cap_points..', '..job..' Job Points: '..job_points)
     end
 
   -- Killed a monster packet
@@ -1363,14 +1486,11 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
   if capped_merit_points and merit_points == max_merit_points and not capped_merits then
 
     capped_merits = true
+    local msg = vana.capped_merit_points
 
-    local text = vana.capped_merit_points
-    if text then
-
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
-
+    if msg then
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
       playSound('capped_merit_points')
-
     end
 
   elseif merit_points < max_merit_points and capped_merits then
@@ -1644,93 +1764,67 @@ end)
 -- TODO: Investigate performance of processes in this event.
 register_event('time change', function(new, old)
 
-  local logged_in = get_info().logged_in
-  local player = get_player()
+  heartbeat = os.time()
 
-  -- The alive flag prevents a few things from happening when knocked out
-  if logged_in and player.vitals.hp == 0 and alive then
-    alive = false
-  elseif logged_in and player.vitals.hp > 0 and not alive then
-    alive = true
-  end
+  print_debug('=== Time Change Event (Heartbeat) === ['..heartbeat..']') -- Debug line, can be removed later
 
-  if not paused and logged_in then
+  if not paused then -- Encapsulate all functionality within the paused check
 
-    heartbeat = os.time()
+    -- Passed from the previous heartbeat to prevent calling APIs multiple times
+    -- ! Check is this more efficient or not.
+    logged_in = logged_in or get_info().logged_in
+    player = player or get_player()
 
-    local player_job = player.main_job
-
-    trackPartyStructure()
-    updateRecasts()
-
-
-    -- Check if abilities are ready
-    for ability, enabled in pairs(ability_ready) do
-      if enabled then
-        if recast[ability] and recast[ability] > 0 and ready[ability] then
-          ready[ability] = false
-        elseif recast[ability] == 0 and not ready[ability] then
-                local text = vana.ability_ready
-          if text then
-            text = abilityPlaceholders(text, ability_name[ability])
-            add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
-            playSound('ability_ready')
-            ready[ability] = true
-          end
-        end
-      end
+    if logged_in and player then
+      print_debug('Player HP: '..tostring(player.vitals.hp)..', Alive: '..tostring(alive):upper())
+    else
+      print_debug('Player not logged in.')
     end
 
-    -- Check if any Key Items are ready
-    checkKIReminderTimestamps()
+    -- Exit if player is not logged in fail-safe
+    if not logged_in or not player then
+      return
+    end
+
+    -- The alive flag prevents a few things from happening when knocked out
+    if logged_in and player.vitals.hp == 0 and alive then
+      alive = false
+    elseif logged_in and player.vitals.hp > 0 and not alive then
+      alive = true
+    end
+
+    -- Track party/alliance structure changes
+    -- ! Consider moving this to incoming chunk event for party changes.
+    -- ! There isn't any reason to be calling this is there is no activity.
+    monitor("trackPartyStructure()", trackPartyStructure)
+
+    -- Update recast timers
+    monitor("updateRecasts()", updateRecasts)
+
+    -- Check abilities are ready
+    monitor("checkAbilityReadyNotifications()", checkAbilityReadyNotifications)
 
     -- Check on Mog Locker lease expiration time once per hour
     if heartbeat % 3600 == 0 then
-      checkMogLockerReminder()
+      monitor("checkMogLockerReminder()", checkMogLockerReminder)
     end
 
-    -- Check Sparkolade reminder every 1 minute
-    if heartbeat % 60 == 0 then
-      checkSparkoladeReminder()
+    -- Check Sparks reminder every 10 minutes
+    -- ! Moved from every 1 minutes
+    if heartbeat % 600 == 0 then
+      monitor("checkSparksReminder()", checkSparksReminder)
+      -- Check if any Key Items are ready
+      -- ! Moved to check every minute rather than every heartbeat
+      monitor("checkKIReminderTimestamps()", checkKIReminderTimestamps)
     end
 
-    -- Coutdown for checking party for low mp
-    if check_party_for_low_mp and (player_job == 'RDM' or player_job == 'BRD') then
-
-      if countdowns.check_party_for_low_mp > 0 then
-
-        countdowns.check_party_for_low_mp = countdowns.check_party_for_low_mp - 1
-
-      elseif countdowns.check_party_for_low_mp == 0 and not check_party_for_low_mp_toggle then
-
-        check_party_for_low_mp_toggle = true
-        checkPartyForLowMP()
-
-      end
-    end
+    -- Countdown for checking party for low mp
+    -- ! Moved to function call
+    monitor("countdownForPartyForLowMPChecks()", countdownForPartyForLowMPChecks, player.main_job)
 
     -- Countdown for Vorseal Reminder
-    if vorseal_wearing then
-
-      if countdowns.vorseal > 0 then
-
-        countdowns.vorseal = countdowns.vorseal - 1
-
-      elseif countdowns.vorseal == 0 then
-
-        countdowns.vorseal = -1
-        local vorseal_text = vana.vorseal_wearing
-
-        if vorseal_text then
-
-          add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(vorseal_text):color(vana.info.text_color))
-          playSound('vorseal_wearing')
-
-        end
-
-      end
-
-    end
+    -- ! Moved to function call
+    monitor("countdownForVorsealChecks()", countdownForVorsealChecks)
 
     -- Countdown for Mireu (so we don't call "Mireu popped" when the battle is over)
     if mireu_popped and countdowns.mireu > 0 then
@@ -1738,45 +1832,10 @@ register_event('time change', function(new, old)
     end
 
     -- Countdown for Reraise Check
-    if reraise_check and player.vitals.hp ~= 0 then
-
-      if countdowns.reraise > 0 then
-
-        countdowns.reraise = countdowns.reraise - 1
-
-      elseif countdowns.reraise == 0 then
-
-        countdowns.reraise = reraise_check_delay_minutes
-
-        -- Check if we have reraise active
-        local function reraiseActive()
-          local buffs = get_player().buffs
-          for _, buffId in ipairs(buffs) do
-            if buffId == 113 then
-              return true
-            end
-          end
-          return false
-        end
-
-        -- Only inform if reraise is not active and we are not in town
-        -- !! This might be a gotcha due to DynamisD might need reraise to be active
-        if not reraiseActive() and (not reraise_check_not_in_town or (reraise_check_not_in_town and not isInTownZone())) then
-
-          local msg = vana.reraise_check
-
-          if msg then
-
-            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
-            playSound('reraise_check')
-
-          end
-
-        end
-      end
-    end
+    -- ! Moved to function call
+    monitor("countdownForReraiseChecks()", countdownForReraiseChecks)
   end
---   end
+
 end)
 
 -- Addon command event
@@ -1851,6 +1910,26 @@ register_event('addon command',function(addcmd, ...)
     end
 
     schedule_settings_save()
+
+  elseif addcmd == "debug" then
+
+    debug_mode = not debug_mode
+
+    if debug_mode then
+      add_to_chat(8,('[Vana] '):color(220)..('Debug Mode: '):color(8)..('On'):color(1):upper())
+    else
+      add_to_chat(8,('[Vana] '):color(220)..('Debug Mode: '):color(8)..('Off'):color(1):upper())
+    end
+
+  elseif addcmd == "monitor" then
+
+    monitor_mode = not monitor_mode
+
+    if monitor_mode then
+      add_to_chat(8,('[Vana] '):color(220)..('Monitor Mode: '):color(8)..('On'):color(1):upper())
+    else
+      add_to_chat(8,('[Vana] '):color(220)..('Monitor Mode: '):color(8)..('Off'):color(1):upper())
+    end
 
   elseif addcmd == "test" then
 

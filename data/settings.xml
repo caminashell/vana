@@ -107,28 +107,28 @@
             <reraise_check_delay_minutes>60</reraise_check_delay_minutes>
             <reraise_check_not_in_town>false</reraise_check_not_in_town>
             <sound_effects>true</sound_effects>
-            <sparkolade_reminder>true</sparkolade_reminder>
-            <sparkolade_reminder_day>Saturday</sparkolade_reminder_day>
-            <sparkolade_reminder_time>1200</sparkolade_reminder_time>
+            <sparks_reminder>true</sparks_reminder>
+            <sparks_reminder_day>Saturday</sparks_reminder_day>
+            <sparks_reminder_time>1200</sparks_reminder_time>
         </options>
         <timestamps>
             <canteen>
-                <avestara>1769511912</avestara>
+                <avestara>1769692377</avestara>
             </canteen>
             <last_check>1769014899</last_check>
             <mog_locker_expiration>
 
             </mog_locker_expiration>
             <mog_locker_reminder>
-                <avestara>1769464800</avestara>
+                <avestara>1769709600</avestara>
             </mog_locker_reminder>
             <moglophone>
-                <avestara>1769511912</avestara>
+                <avestara>1769692377</avestara>
             </moglophone>
             <plate>
-                <avestara>1769461512</avestara>
+                <avestara>1769668395</avestara>
             </plate>
-            <sparkolades>1769860800</sparkolades>
+            <sparkss>1769860800</sparkss>
         </timestamps>
     </global>
 </settings>
