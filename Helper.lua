@@ -179,6 +179,7 @@ local vana = {
   other_party_left_alliance = "A party has left the alliance.",
   you_are_now_alliance_leader = "You are now the alliance leader.",
   you_are_now_party_leader = "You are now the party leader.",
+  loot_rules_changed = "Looting rules have changed."
 }
 
 local settings = config.load(defaults)
@@ -324,17 +325,351 @@ local party_check_interval = 1.0 -- seconds
 local debug_mode = false
 local monitor_mode = false
 
+-- !! START PROTOTYPE: State driven Group Event Listener
+-- https://github.com/Windower/Lua/wiki/
+
+-- Utility function to count table length
+function tablelength(T)
+  local count = 0
+  for _ in pairs(T) do count = count + 1 end
+  return count
+end
+
+local listeners = {}
+
+local function notify(msg,sfx)
+  if not msg then return end
+  add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
+  playSound(sfx)
+end
+
+local function on(event, fn)
+  listeners[event] = listeners[event] or {}
+  table.insert(listeners[event], fn)
+end
+
+on('alliance_joined', function()
+    notify(vana.you_joined_alliance, 'you_joined_alliance')
+end)
+
+on('party_joined', function()
+    notify(vana.you_joined_party, 'you_joined_party')
+end)
+
+on('alliance_left', function()
+    notify(vana.you_left_alliance, 'you_left_alliance')
+end)
+
+on('party_left', function()
+    notify(vana.you_left_party, 'you_left_party')
+end)
+
+-- ! Double-check event
+on('party_moved', function()
+    -- notify(vana.your_party_joined_alliance, 'your_party_joined_alliance')
+    notify('check: party_moved event', 'notification')
+end)
+
+on('member_joined_party', function(name)
+    notify(memberPlaceholder(vana.member_joined_party, name), 'member_joined_party')
+end)
+
+on('member_joined_alliance', function(name)
+    notify(memberPlaceholder(vana.member_joined_alliance, name), 'member_joined_alliance')
+end)
+
+on('member_left_party', function(name)
+    notify(memberPlaceholder(vana.member_left_party, name), 'member_left_party')
+end)
+
+on('member_left_alliance', function(name)
+    notify(memberPlaceholder(vana.member_left_alliance, name), 'member_left_alliance')
+end)
+
+on('party_leader_changed', function(name)
+    notify(vana.you_are_now_party_leader, 'you_are_now_party_leader')
+end)
+
+on('alliance_leader_changed', function(name)
+    notify(vana.you_are_now_alliance_leader, 'you_are_now_alliance_leader')
+end)
+
+on('loot_rules_changed', function(name)
+    notify(vana.loot_rules_changed, 'loot_rules_changed')
+end)
+
+local function emit(event, ...)
+  if listeners[event] then
+    for _, fn in ipairs(listeners[event]) do
+      fn(...)
+    end
+  end
+end
+
+local party_positions = {
+  'p0','p1','p2','p3','p4','p5',
+  'a10','a11','a12','a13','a14','a15',
+  'a20','a21','a22','a23','a24','a25'
+}
+
+local function build_state()
+  local party = get_party() or {}
+  local state = {
+    in_party = false,
+    in_alliance = false,
+    party_leader = nil,
+    alliance_leader = nil,
+    alliance_count = 0,
+    members = {},
+    loot = {
+      method = nil,
+      lotting = nil
+    },
+    position = nil
+  }
+
+  -- Scan slots
+  for _, position in ipairs(party_positions) do
+    local member = party[position]
+
+    if member and member.name then
+      state.members[member.name] = { position = position }
+
+      if debug_mode then
+        print_debug('Member: '..tostring(member.name)..', position: '..tostring(position))
+      end
+
+      -- Detect if you are in this party
+      if member.name == player.name then
+        state.my_position = position
+        state.in_alliance = position:sub(1,1) ~= 'p'
+        if party.party1_count > 1 then state.in_party = position:sub(1,1) == 'p' end
+      end
+    end
+  end
+
+  if debug_mode then
+    print_debug(
+      'My position: '..state.my_position..
+      ', in party: '..tostring(state.in_party)..
+      ', party leader: '..tostring(state.party_leader)..
+      ', party counts: '..party.party1_count..
+      ', '..party.party2_count..
+      ', '..party.party3_count..
+      ', in alliance: '..tostring(state.in_alliance)..
+      ', alliance leader: '..tostring(state.alliance_leader)..
+      ', alliance count: '..party.alliance_count
+    )
+  end
+
+  state.alliance_count = party.alliance_count
+
+  -- Party leader
+  if party.party1_leader then state.party_leader = party.party1_leader end
+  -- Alliance leader (usually a10)
+  if party.a10 and party.a10.name then state.alliance_leader = party.a10.name end
+
+  -- Loot info
+  if party.party1_loot then state.loot.method = party.party1_loot end
+  if party.party1_lot then state.loot.lotting = party.party1_lot end
+
+  return state
+end
+
+local prev_state = build_state()
+local suppress_until = 0
+
+local function group_tracker()
+  local info = get_info()
+  if info and info.zoning then return end
+
+  local now = os.clock()
+  local curr_state = build_state()
+
+  -- Self join / leave suppression
+  if prev_state.my_position ~= curr_state.my_position then
+    suppress_until = now + 0.3
+    prev_state = curr_state
+    return
+  end
+
+  if now < suppress_until then return end
+
+  -- --- Begin state diff logic ---
+
+  -- 1. Self events
+  if not prev_state.in_party and curr_state.in_party then
+    emit('party_joined')
+  elseif prev_state.in_party and not curr_state.in_party then
+    emit('party_left')
+  end
+
+  if not prev_state.in_alliance and curr_state.in_alliance then
+    emit('alliance_joined')
+  elseif prev_state.in_alliance and not curr_state.in_alliance then
+    emit('alliance_left')
+  end
+
+  -- 2. Party <-> Alliance move
+  if prev_state.in_alliance and curr_state.in_alliance
+    and prev_state.my_position ~= curr_state.my_position then
+    emit('party_moved', prev_state.my_position, curr_state.my_position)
+  end
+
+  -- 3. Members join/leave party or alliance
+  for member_name, member_info in pairs(curr_state.members) do
+    local prev_info = prev_state.members[member_name]
+    if not prev_info then
+      if member_info.position:sub(1,1) == 'p' then
+        emit('member_joined_party', member_name)
+      else
+        emit('member_joined_alliance', member_name)
+      end
+    elseif prev_info.position ~= member_info.position then
+      emit('member_moved', member_name, prev_info.position, member_info.position)
+    end
+  end
+
+  for member_name, member_info in pairs(prev_state.members) do
+    if not curr_state.members[member_name] then
+      if member_info.position:sub(1,1) == 'p' then
+        emit('member_left_party', member_name)
+      else
+        emit('member_left_alliance', member_name)
+      end
+    end
+  end
+
+  -- 4. Leadership
+  if prev_state.party_leader ~= curr_state.party_leader
+  and curr_state.alliance_count > 1 then
+    emit('party_leader_changed', curr_state.party_leader)
+  end
+
+  if prev_state.alliance_leader ~= curr_state.alliance_leader then
+    emit('alliance_leader_changed', curr_state.alliance_leader)
+  end
+
+  -- 5. Loot rules
+  if prev_state.loot.method ~= curr_state.loot.method
+    or prev_state.loot.lotting ~= curr_state.loot.lotting then
+    emit('loot_rules_changed', curr_state.loot)
+  end
+
+  -- Update previous state
+  prev_state = curr_state
+
+end
+
+-- ! First attempt...
+-- local last_signature = nil
+-- local last_members = {}
+
+-- local function group_snapshot()
+--     local snapshot = {}
+--     local party = get_party()
+--     if not party then return snapshot end
+
+--     for _, position in ipairs(party_positions) do
+--         local member = party[position]
+--         if member and member.name then
+--             snapshot[position] = {
+--                 name = member.name,
+--                 is_npc = member.is_npc or false
+--             }
+--         end
+--     end
+--     return snapshot
+-- end
+
+-- local function group_signature(snapshot)
+--     local signature = {}
+--     for _, position in ipairs(party_positions) do
+--         local member = snapshot[position]
+--         if member then
+--             table.insert(signature, position .. ':' .. member.name)
+--         else
+--             table.insert(signature, position .. ':-')
+--         end
+--     end
+--     return table.concat(signature, '|')
+-- end
+
+-- local function group_tracker()
+--   -- Exit if zoning or not logged in
+--   local info = get_info()
+--   if info and info.zoning or not info.logged_in then return end
+
+--   local snapshot = group_snapshot()
+--   local signature = group_signature(snapshot)
+
+--   if signature == last_signature then
+--     return
+--   end
+
+--   -- Build reverse lookup
+--   local current = {}
+--   for position, member in pairs(snapshot) do
+--     current[member.name] = position
+--   end
+
+--   local previous = {}
+--   for position, member in pairs(last_members) do
+--     previous[member.name] = position
+--   end
+
+--   -- joins & moves (party vs alliance aware)
+--   for name, position in pairs(current) do
+--     local prev_position = previous[name]
+
+--     local in_my_party = position:sub(1,1) == 'p'
+--     local was_in_party = prev_position and prev_position:sub(1,1) == 'p'
+
+--     if not prev_position then
+--       -- brand new join
+--       if in_my_party then
+--         notify(name .. ' joined the party.', 'you_joined_party')
+--       else
+--         notify(name .. ' joined the alliance.', 'you_joined_alliance')
+--       end
+
+--     elseif prev_position ~= position then
+--       -- moved between positions / groups
+--       if not was_in_party and in_my_party then
+--         notify(name .. ' joined the party.', 'you_joined_party')
+--       elseif was_in_party and not in_my_party then
+--         notify(name .. ' left the party.', 'you_left_party')
+--       else
+--         -- moved within alliance or within party (optional)
+--         notify(name .. ' moved positions.', 'you_joined_party')
+--       end
+--     end
+--   end
+
+--   -- leaves
+--   for name in pairs(previous) do
+--     if not current[name] then
+--       windower.add_to_chat(207, name .. ' left the alliance.', 'you_left_alliance')
+--     end
+--   end
+
+--   last_members = snapshot
+--   last_signature = signature
+-- end
+
+--!! END PROTOTYPE: (refactored functional) group tracking
+
 --[[ === CORE FUNCTIONS === ]]---
 
 -- Print debug messages to console if debug mode is enabled (default: false)
-local function print_debug(msg)
+function print_debug(msg)
   if debug_mode then
     print('[DEBUG] '..msg)
   end
 end
 
 -- Print rough profiling to console if monitor mode is enabled (default: false)
-local function monitor(name, fn, ...)
+function monitor(name, fn, ...)
   if not monitor_mode then
     return fn(...)
   else
@@ -348,7 +683,7 @@ end
 
 -- Debounced settings save, replacing immediate saves.
 -- Reduces IO load and CPU load.
-local function schedule_settings_save(delay)
+function schedule_settings_save(delay)
   print_debug( 'Scheduling settings save...') -- Debug line, can be removed later
   if _save_scheduled then return end
   _save_scheduled = true
@@ -361,7 +696,7 @@ end
 
 -- Sound / file cache (built once, at load time)
 -- Reduces filesystem reads and CPU load.
-local function build_sound_cache()
+function build_sound_cache()
   print_debug( 'Building sound cache...') -- Debug line, can be removed later
   sound_cache = {}
   -- scan media_folder and helper folders once
@@ -372,7 +707,7 @@ local function build_sound_cache()
 end
 
 -- TODO: Optimize placeholder replacement with caching (unfinished/unused)
-local function format_message(template, key)
+function format_message(template, key)
   print_debug( 'Formatting message...') -- Debug line, can be removed later
   local cache_key = template .. (key or '')
   if placeholder_cache[cache_key] then return placeholder_cache[cache_key] end
@@ -1748,7 +2083,6 @@ register_event('lose buff', function(buff)
   end
 
 end)
-
 -- Player changes job
 register_event('job change', function()
 
@@ -1804,7 +2138,8 @@ register_event('time change', function(new, old)
     -- Track party/alliance structure changes
     -- ! Consider moving this to incoming chunk event for party changes.
     -- ! There isn't any reason to be calling this is there is no activity.
-    monitor("trackPartyStructure()", trackPartyStructure)
+    -- monitor("trackPartyStructure()", trackPartyStructure)
+    monitor("group_tracker()", group_tracker)
 
     -- Update recast timers
     monitor("updateRecasts()", updateRecasts)
