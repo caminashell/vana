@@ -120,6 +120,10 @@ Version 2.6.1-29b
 
 - Added debug & performance monitoring.
 - Moved some logic from heartbeat (time change) event to function calls.
+- Refactored party/alliance structure tracking.
+  - Now only tracks only if there is a party/alliance active.
+  - Uses event listeners to process notifications (reduced code repetition).
+- Removed redundant base code.
 
 Version 2.6.1-26b
 

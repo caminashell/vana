@@ -1,5 +1,4 @@
--- TODO: Localise functions that are called frequently.
--- TODO: Move function calls out of prerender, even with interval, checks every frame (60), spiking CPU every ~1s for GC.
+-- TODO: Rename addon module from "Helper" to "Vana" (added benefit: could be run side by side with original Helper)
 -- TODO: Feature: Implement Besieged message alert.
 -- TODO: Feature: Implement current job checks for chat alerts (e.g., Looking for WHM, etc).
 -- TODO: Feature: Daily/Weekly task reset notices (Oseem, ROE, Monberaux, Sortie, Odyssey, Domain, etc).
@@ -184,37 +183,38 @@ local vana = {
 
 local settings = config.load(defaults)
 
+-- TODO: Look at moving these definitions into the vana object (housekeeping)
 local first_run = settings.first_run
 local have_key_item = settings.have_key_item
 local key_item_ready = settings.key_item_ready
 local timestamps = settings.timestamps
-local opt = settings.options
+local options = settings.options
 
-local ability_ready = opt.ability_ready
-local after_zone_party_check_delay_seconds = math.floor(opt.after_zone_party_check_delay_seconds)
-local check_party_for_low_mp = opt.check_party_for_low_mp
-local check_party_for_low_mp_delay_minutes = math.floor(opt.check_party_for_low_mp_delay_minutes * 60)
-local introduce_on_load = opt.introduce_on_load
-local key_item_reminders = opt.key_item_reminders
-local ntf = opt.notifications
-local party_announcements = opt.party_announcements
-local reraise_check = opt.reraise_check
-local reraise_check_delay_minutes = math.floor(opt.reraise_check_delay_minutes * 60)
-local reraise_check_not_in_town = opt.reraise_check_not_in_town
-local sound_effects = opt.media.sound_effects
-local sparks_reminder = opt.sparks_reminder
-local sparks_reminder_day = opt.sparks_reminder_day
-local sparks_reminder_time = opt.sparks_reminder_time
+local ability_ready = options.ability_ready
+local after_zone_party_check_delay_seconds = math.floor(options.after_zone_party_check_delay_seconds)
+local check_party_for_low_mp = options.check_party_for_low_mp
+local check_party_for_low_mp_delay_minutes = math.floor(options.check_party_for_low_mp_delay_minutes * 60)
+local introduce_on_load = options.introduce_on_load
+local key_item_reminders = options.key_item_reminders
+local notifications = options.notifications
+local party_announcements = options.party_announcements
+local reraise_check = options.reraise_check
+local reraise_check_delay_minutes = math.floor(options.reraise_check_delay_minutes * 60)
+local reraise_check_not_in_town = options.reraise_check_not_in_town
+local sound_effects = options.media.sound_effects
+local sparks_reminder = options.sparks_reminder
+local sparks_reminder_day = options.sparks_reminder_day
+local sparks_reminder_time = options.sparks_reminder_time
 
-local capped_job_points = ntf.capped_job_points
-local capped_merit_points = ntf.capped_merit_points
-local food_wears_off = ntf.food_wears_off
-local mireu_popped = ntf.mireu_popped
-local mog_locker_expiring = ntf.mog_locker_expiring
-local reraise_wears_off = ntf.reraise_wears_off
-local signet_wears_off = ntf.signet_wears_off
-local sublimation_charged = ntf.sublimation_charged
-local vorseal_wearing = ntf.vorseal_wearing
+local capped_job_points = notifications.capped_job_points
+local capped_merit_points = notifications.capped_merit_points
+local food_wears_off = notifications.food_wears_off
+local mireu_popped = notifications.mireu_popped
+local mog_locker_expiring = notifications.mog_locker_expiring
+local reraise_wears_off = notifications.reraise_wears_off
+local signet_wears_off = notifications.signet_wears_off
+local sublimation_charged = notifications.sublimation_charged
+local vorseal_wearing = notifications.vorseal_wearing
 
 local countdowns = {
   check_party_for_low_mp = 0,
@@ -293,16 +293,8 @@ local abilities = {
   troubadour = "Troubadour",
 }
 
-local logged_in = get_info().logged_in
-local player = get_player()
-
 local recast = {}
-local party_structure = {}
 local heartbeat = 0
-local in_party = false
-local in_alliance = false
-local party_leader = false
-local alliance_leader = false
 local limit_points = 0
 local merit_points = 0
 local max_merit_points = 0
@@ -310,6 +302,9 @@ local capped_merits = true
 local cap_points = 0
 local job_points = 500
 local capped_jps = true
+local prev_state = {}
+local suppress_until = 0
+
 local check_party_for_low_mp_toggle = true
 local zoned = false
 local paused = false
@@ -319,23 +314,22 @@ local media_folder = addon_path.."media/"
 local _save_scheduled = false
 local sound_cache = {}
 local placeholder_cache = {}
-local last_party_check = 0
-local party_check_interval = 1.0 -- seconds
 
 local debug_mode = false
 local monitor_mode = false
+local group_state = {}
 
 -- !! START PROTOTYPE: State driven Group Event Listener
 -- https://github.com/Windower/Lua/wiki/
 
--- Utility function to count table length
-function tablelength(T)
-  local count = 0
-  for _ in pairs(T) do count = count + 1 end
-  return count
-end
-
 local listeners = {}
+
+-- Utility function to count table length
+-- local function tablelength(T)
+--   local count = 0
+--   for _ in pairs(T) do count = count + 1 end
+--   return count
+-- end
 
 local function notify(msg,sfx)
   if not msg then return end
@@ -348,55 +342,59 @@ local function on(event, fn)
   table.insert(listeners[event], fn)
 end
 
-on('alliance_joined', function()
-    notify(vana.you_joined_alliance, 'you_joined_alliance')
-end)
+if party_announcements then
 
-on('party_joined', function()
-    notify(vana.you_joined_party, 'you_joined_party')
-end)
+  on('alliance_joined', function()
+      notify(vana.you_joined_alliance, 'you_joined_alliance')
+  end)
 
-on('alliance_left', function()
-    notify(vana.you_left_alliance, 'you_left_alliance')
-end)
+  on('party_joined', function()
+      notify(vana.you_joined_party, 'you_joined_party')
+  end)
 
-on('party_left', function()
-    notify(vana.you_left_party, 'you_left_party')
-end)
+  on('alliance_left', function()
+      notify(vana.you_left_alliance, 'you_left_alliance')
+  end)
 
--- ! Double-check event
-on('party_moved', function()
-    -- notify(vana.your_party_joined_alliance, 'your_party_joined_alliance')
-    notify('check: party_moved event', 'notification')
-end)
+  on('party_left', function()
+      notify(vana.you_left_party, 'you_left_party')
+  end)
 
-on('member_joined_party', function(name)
-    notify(memberPlaceholder(vana.member_joined_party, name), 'member_joined_party')
-end)
+  -- ! Double-check event
+  on('party_moved', function()
+      -- notify(vana.your_party_joined_alliance, 'your_party_joined_alliance')
+      notify('check: party_moved event', 'notification')
+  end)
 
-on('member_joined_alliance', function(name)
-    notify(memberPlaceholder(vana.member_joined_alliance, name), 'member_joined_alliance')
-end)
+  on('member_joined_party', function(name)
+      notify(memberPlaceholder(vana.member_joined_party, name), 'member_joined_party')
+  end)
 
-on('member_left_party', function(name)
-    notify(memberPlaceholder(vana.member_left_party, name), 'member_left_party')
-end)
+  on('member_joined_alliance', function(name)
+      notify(memberPlaceholder(vana.member_joined_alliance, name), 'member_joined_alliance')
+  end)
 
-on('member_left_alliance', function(name)
-    notify(memberPlaceholder(vana.member_left_alliance, name), 'member_left_alliance')
-end)
+  on('member_left_party', function(name)
+      notify(memberPlaceholder(vana.member_left_party, name), 'member_left_party')
+  end)
 
-on('party_leader_changed', function(name)
-    notify(vana.you_are_now_party_leader, 'you_are_now_party_leader')
-end)
+  on('member_left_alliance', function(name)
+      notify(memberPlaceholder(vana.member_left_alliance, name), 'member_left_alliance')
+  end)
 
-on('alliance_leader_changed', function(name)
-    notify(vana.you_are_now_alliance_leader, 'you_are_now_alliance_leader')
-end)
+  on('party_leader_changed', function(name)
+      notify(vana.you_are_now_party_leader, 'you_are_now_party_leader')
+  end)
 
-on('loot_rules_changed', function(name)
-    notify(vana.loot_rules_changed, 'loot_rules_changed')
-end)
+  on('alliance_leader_changed', function(name)
+      notify(vana.you_are_now_alliance_leader, 'you_are_now_alliance_leader')
+  end)
+
+  on('loot_rules_changed', function(name)
+      notify(vana.loot_rules_changed, 'loot_rules_changed')
+  end)
+
+end
 
 local function emit(event, ...)
   if listeners[event] then
@@ -406,15 +404,14 @@ local function emit(event, ...)
   end
 end
 
-local party_positions = {
-  'p0','p1','p2','p3','p4','p5',
-  'a10','a11','a12','a13','a14','a15',
-  'a20','a21','a22','a23','a24','a25'
-}
+local function build_state(player, party)
+  local party_positions = {
+    'p0','p1','p2','p3','p4','p5',
+    'a10','a11','a12','a13','a14','a15',
+    'a20','a21','a22','a23','a24','a25'
+  }
 
-local function build_state()
-  local party = get_party() or {}
-  local state = {
+  group_state = {
     in_party = false,
     in_alliance = false,
     party_leader = nil,
@@ -433,7 +430,7 @@ local function build_state()
     local member = party[position]
 
     if member and member.name then
-      state.members[member.name] = { position = position }
+      group_state.members[member.name] = { position = position }
 
       if debug_mode then
         print_debug('Member: '..tostring(member.name)..', position: '..tostring(position))
@@ -441,50 +438,49 @@ local function build_state()
 
       -- Detect if you are in this party
       if member.name == player.name then
-        state.my_position = position
-        state.in_alliance = position:sub(1,1) ~= 'p'
-        if party.party1_count > 1 then state.in_party = position:sub(1,1) == 'p' end
+        group_state.my_position = position
+        group_state.in_alliance = position:sub(1,1) ~= 'p'
+        if party.party1_count > 1 then group_state.in_party = position:sub(1,1) == 'p' end
       end
     end
   end
 
   if debug_mode then
     print_debug(
-      'My position: '..state.my_position..
-      ', in party: '..tostring(state.in_party)..
-      ', party leader: '..tostring(state.party_leader)..
+      'My position: '..group_state.my_position..
+      ', in party: '..tostring(group_state.in_party)..
+      ', party leader: '..tostring(group_state.party_leader)..
       ', party counts: '..party.party1_count..
       ', '..party.party2_count..
       ', '..party.party3_count..
-      ', in alliance: '..tostring(state.in_alliance)..
-      ', alliance leader: '..tostring(state.alliance_leader)..
+      ', in alliance: '..tostring(group_state.in_alliance)..
+      ', alliance leader: '..tostring(group_state.alliance_leader)..
       ', alliance count: '..party.alliance_count
     )
   end
 
-  state.alliance_count = party.alliance_count
+  group_state.alliance_count = party.alliance_count
 
   -- Party leader
-  if party.party1_leader then state.party_leader = party.party1_leader end
+  if party.party1_leader then group_state.party_leader = party.party1_leader end
   -- Alliance leader (usually a10)
-  if party.a10 and party.a10.name then state.alliance_leader = party.a10.name end
+  if party.a10 and party.a10.name then group_state.alliance_leader = party.a10.name end
 
   -- Loot info
-  if party.party1_loot then state.loot.method = party.party1_loot end
-  if party.party1_lot then state.loot.lotting = party.party1_lot end
+  if party.party1_loot then group_state.loot.method = party.party1_loot end
+  if party.party1_lot then group_state.loot.lotting = party.party1_lot end
 
-  return state
+  return group_state
 end
 
-local prev_state = build_state()
-local suppress_until = 0
+local function group_tracker(info, player, party)
+  if debug_mode then print_debug('Checking group structure...') end
 
-local function group_tracker()
-  local info = get_info()
-  if info and info.zoning then return end
+  -- Exit if in a zone or player is not logged in
+  if info and info.zoning or not player then return end
 
   local now = os.clock()
-  local curr_state = build_state()
+  local curr_state = build_state(player, party)
 
   -- Self join / leave suppression
   if prev_state.my_position ~= curr_state.my_position then
@@ -495,9 +491,8 @@ local function group_tracker()
 
   if now < suppress_until then return end
 
-  -- --- Begin state diff logic ---
-
-  -- 1. Self events
+  -- group_state diff logic
+  -- Self events
   if not prev_state.in_party and curr_state.in_party then
     emit('party_joined')
   elseif prev_state.in_party and not curr_state.in_party then
@@ -510,13 +505,13 @@ local function group_tracker()
     emit('alliance_left')
   end
 
-  -- 2. Party <-> Alliance move
+  -- Party <-> Alliance move
   if prev_state.in_alliance and curr_state.in_alliance
     and prev_state.my_position ~= curr_state.my_position then
     emit('party_moved', prev_state.my_position, curr_state.my_position)
   end
 
-  -- 3. Members join/leave party or alliance
+  -- Members join/leave party or alliance
   for member_name, member_info in pairs(curr_state.members) do
     local prev_info = prev_state.members[member_name]
     if not prev_info then
@@ -540,7 +535,7 @@ local function group_tracker()
     end
   end
 
-  -- 4. Leadership
+  -- Leadership
   if prev_state.party_leader ~= curr_state.party_leader
   and curr_state.alliance_count > 1 then
     emit('party_leader_changed', curr_state.party_leader)
@@ -550,112 +545,16 @@ local function group_tracker()
     emit('alliance_leader_changed', curr_state.alliance_leader)
   end
 
-  -- 5. Loot rules
+  -- Loot rules
   if prev_state.loot.method ~= curr_state.loot.method
     or prev_state.loot.lotting ~= curr_state.loot.lotting then
     emit('loot_rules_changed', curr_state.loot)
   end
 
-  -- Update previous state
+  -- Update previous group_state
   prev_state = curr_state
 
 end
-
--- ! First attempt...
--- local last_signature = nil
--- local last_members = {}
-
--- local function group_snapshot()
---     local snapshot = {}
---     local party = get_party()
---     if not party then return snapshot end
-
---     for _, position in ipairs(party_positions) do
---         local member = party[position]
---         if member and member.name then
---             snapshot[position] = {
---                 name = member.name,
---                 is_npc = member.is_npc or false
---             }
---         end
---     end
---     return snapshot
--- end
-
--- local function group_signature(snapshot)
---     local signature = {}
---     for _, position in ipairs(party_positions) do
---         local member = snapshot[position]
---         if member then
---             table.insert(signature, position .. ':' .. member.name)
---         else
---             table.insert(signature, position .. ':-')
---         end
---     end
---     return table.concat(signature, '|')
--- end
-
--- local function group_tracker()
---   -- Exit if zoning or not logged in
---   local info = get_info()
---   if info and info.zoning or not info.logged_in then return end
-
---   local snapshot = group_snapshot()
---   local signature = group_signature(snapshot)
-
---   if signature == last_signature then
---     return
---   end
-
---   -- Build reverse lookup
---   local current = {}
---   for position, member in pairs(snapshot) do
---     current[member.name] = position
---   end
-
---   local previous = {}
---   for position, member in pairs(last_members) do
---     previous[member.name] = position
---   end
-
---   -- joins & moves (party vs alliance aware)
---   for name, position in pairs(current) do
---     local prev_position = previous[name]
-
---     local in_my_party = position:sub(1,1) == 'p'
---     local was_in_party = prev_position and prev_position:sub(1,1) == 'p'
-
---     if not prev_position then
---       -- brand new join
---       if in_my_party then
---         notify(name .. ' joined the party.', 'you_joined_party')
---       else
---         notify(name .. ' joined the alliance.', 'you_joined_alliance')
---       end
-
---     elseif prev_position ~= position then
---       -- moved between positions / groups
---       if not was_in_party and in_my_party then
---         notify(name .. ' joined the party.', 'you_joined_party')
---       elseif was_in_party and not in_my_party then
---         notify(name .. ' left the party.', 'you_left_party')
---       else
---         -- moved within alliance or within party (optional)
---         notify(name .. ' moved positions.', 'you_joined_party')
---       end
---     end
---   end
-
---   -- leaves
---   for name in pairs(previous) do
---     if not current[name] then
---       windower.add_to_chat(207, name .. ' left the alliance.', 'you_left_alliance')
---     end
---   end
-
---   last_members = snapshot
---   last_signature = signature
--- end
 
 --!! END PROTOTYPE: (refactored functional) group tracking
 
@@ -714,55 +613,6 @@ function format_message(template, key)
   local result = template:gsub('%${member}', key or '') -- expand as needed
   placeholder_cache[cache_key] = result
   return result
-end
-
--- Update the party/alliance structure
--- !! This function creates a new table every time and therefore triggers GC a lot.
--- !! Examine reusing the same table over time.
-function updatePartyStructure()
-  print_debug( 'Updating party structure...') -- Debug line, can be removed later
-	-- Get the current party data
-	local current_party = get_party()
-
-	local new_party_structure = new_party_structure or {
-		alliance_leader = nil,
-		party1_leader = nil,
-		party2_leader = nil,
-		party3_leader = nil,
-		party1_count = nil,
-		party2_count = nil,
-		party3_count = nil,
-		p0 = nil, p1 = nil, p2 = nil, p3 = nil, p4 = nil, p5 = nil,
-		a10 = nil, a11 = nil, a12 = nil, a13 = nil, a14 = nil, a15 = nil,
-		a20 = nil, a21 = nil, a22 = nil, a23 = nil, a24 = nil, a25 = nil
-	}
-
-	-- List of positions to iterate over in the current_party table
-	local all_positions = all_positions or {
-		'p0', 'p1', 'p2', 'p3', 'p4', 'p5',
-		'a10', 'a11', 'a12', 'a13', 'a14', 'a15',
-		'a20', 'a21', 'a22', 'a23', 'a24', 'a25',
-	}
-
-	-- Fill the new_party_structure table with player names
-	for _, position in ipairs(all_positions) do
-		local name = current_party[position] and current_party[position].name or nil
-		if name then
-			new_party_structure[position] = name
-		end
-	end
-
-	-- Fill leader positions in new_party_structure
-	new_party_structure.alliance_leader = current_party.alliance_leader
-	new_party_structure.party1_leader = current_party.party1_leader
-	new_party_structure.party2_leader = current_party.party2_leader
-	new_party_structure.party3_leader = current_party.party3_leader
-	new_party_structure.party1_count = current_party.party1_count
-	new_party_structure.party2_count = current_party.party2_count
-	new_party_structure.party3_count = current_party.party3_count
-
-	return new_party_structure
-
 end
 
 function firstRun()
@@ -1295,277 +1145,6 @@ function findDifferences(old_members, new_members)
 
 end
 
--- Compare party/alliance structure
-function trackPartyStructure()
-  print_debug( 'Tracking party/alliance structure.') -- Debug line, can be removed later
-  -- Debounce/Throttle heavy handler
-  local now = os.clock()
-  if now - last_party_check < party_check_interval then return end
-  last_party_check = now
-
-  -- Initialize the new_party_structure table
-  local new_party_structure = updatePartyStructure()
-  local previously_in_party = in_party
-  local previously_in_alliance = in_alliance
-  local previously_party_leader = party_leader
-  local previously_alliance_leader = alliance_leader
-  local now_in_party = false
-  local now_in_alliance = false
-  local now_party_leader = false
-  local now_alliance_leader = false
-  local announce = party_announcements
-  local old_p1_count = party_structure.party1_count
-  local old_p2_count = party_structure.party2_count
-  local old_p3_count = party_structure.party3_count
-  local new_p1_count = new_party_structure.party1_count
-  local new_p2_count = new_party_structure.party2_count
-  local new_p3_count = new_party_structure.party3_count
-  local old_p2_leader = party_structure.party2_leader
-  local old_p3_leader = party_structure.party3_leader
-  local new_p2_leader = new_party_structure.party2_leader
-  local new_p3_leader = new_party_structure.party3_leader
-
-  -- Get the current party data
-  local party = get_party()
-  local player = get_player()
-
-  -- Check if player is in alliance group
-  if party.alliance_leader then
-    now_in_alliance = true
-    now_in_party = true
-    if party.alliance_leader == player.id then
-      now_alliance_leader = true
-      now_party_leader = true
-    end
-  end
-
-  if not now_in_alliance then
-    -- Check if player is in a party group
-    if party.party1_leader then
-      now_in_party = true
-      if party.party1_leader == player.id then
-        now_party_leader = true
-      end
-    end
-  end
-
-  local msg = nil
-
-  -- Player joins a party that is in an alliance
-  if announce.you_joined_alliance and not previously_in_party and now_in_party and now_in_alliance then
-
-    msg = vana.you_joined_alliance
-
-    if msg then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
-      playSound('you_joined_alliance')
-    end
-
-  -- Player joins a party that is not in an alliance
-  elseif announce.you_joined_party and not previously_in_party and now_in_party and not now_party_leader then
-
-    msg = vana.you_joined_party
-
-    if msg then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
-      playSound('you_joined_party')
-    end
-
-  -- Player leaves a party that is part of an alliance
-  elseif announce.you_left_alliance and previously_in_alliance and not now_in_party then
-
-    msg = vana.you_left_alliance
-
-    if msg then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
-      playSound('you_left_alliance')
-    end
-
-  -- Player leaves a party that is not part of an alliance
-  elseif announce.you_left_party and previously_in_party and not now_in_party then
-
-    msg = vana.you_left_party
-
-    if msg then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
-      playSound('you_left_party')
-    end
-
-  -- Player's party joined an alliance
-  elseif announce.your_party_joined_alliance and previously_in_party and now_in_alliance and not previously_in_alliance then
-
-    msg = vana.your_party_joined_alliance
-
-    if msg then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
-      playSound('your_party_joined_alliance')
-    end
-
-  -- Player's party left an alliance
-  elseif announce.your_party_left_alliance and previously_in_alliance and not now_in_alliance then
-
-    msg = vana.your_party_left_alliance
-
-    if msg then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
-      playSound('your_party_left_alliance')
-    end
-
-  -- Another party joined the alliance
-  elseif announce.other_party_joined_alliance and previously_in_alliance and now_in_alliance and
-         ((not old_p2_leader and new_p2_leader) or (not old_p3_leader and new_p3_leader)) then
-
-    msg = vana.other_party_joined_alliance
-
-    if msg then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
-      playSound('other_party_joined_alliance')
-    end
-
-  -- Another party left the alliance
-  elseif announce.other_party_left_alliance and previously_in_alliance and now_in_alliance and
-         ((old_p2_leader and not new_p2_leader) or (old_p3_leader and not new_p3_leader)) then
-
-    msg = vana.other_party_left_alliance
-
-    if msg then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
-      playSound('other_party_left_alliance')
-    end
-
-  -- Member joined/left your party
-  elseif not msg and new_party_structure and party_structure and
-         new_p1_count and old_p1_count and new_p1_count ~= old_p1_count then
-
-    -- Compare member names for changes in party 1
-    local party1_positions = {'p0', 'p1', 'p2', 'p3', 'p4', 'p5'}
-    local old_party1_members = getMemberNames(party_structure, party1_positions)
-    local new_party1_members = getMemberNames(new_party_structure, party1_positions)
-    local party1_changes = findDifferences(old_party1_members, new_party1_members)
-
-    -- Member joined your party
-    if announce.member_joined_party and new_p1_count > old_p1_count then
-
-      for _, member in ipairs(party1_changes.added) do
-        if member ~= '' then
-          msg = vana.member_joined_party
-          if msg then
-            msg = memberPlaceholder(msg, member)
-            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
-            playSound('member_joined_party')
-          end
-        else
-          -- If the name of the member hasn't loaded yet and thus comes back nil/empty,
-          -- set the party count back to it's original state to try again
-          new_party_structure.party1_count = party_structure.party1_count
-        end
-      end
-
-    -- Member left your party
-    elseif announce.member_left_party and new_p1_count < old_p1_count then
-
-      for _, member in ipairs(party1_changes.removed) do
-        if member ~= '' then
-          msg = vana.member_left_party
-          if msg then
-            msg = memberPlaceholder(msg, member)
-            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
-            playSound('member_left_party')
-          end
-        else
-          -- If the name of the member hasn't loaded yet and thus comes back nil/empty,
-          -- set the party count back to it's original state to try again
-          new_party_structure.party1_count = party_structure.party1_count
-        end
-      end
-
-    end
-
-  -- Member joined/left an alliance party
-  elseif not msg and new_party_structure and party_structure and
-         new_p2_count and old_p2_count and new_p3_count and old_p3_count and
-         (new_p2_count ~= old_p2_count or new_p3_count ~= old_p3_count) then
-
-    -- Compare member names for changes in party 2 and 3 combined (alliance parties)
-    local alliance_positions = {
-      'a10', 'a11', 'a12', 'a13', 'a14', 'a15',
-      'a20', 'a21', 'a22', 'a23', 'a24', 'a25'
-    }
-
-    local old_alliance_members = getMemberNames(party_structure, alliance_positions)
-    local new_alliance_members = getMemberNames(new_party_structure, alliance_positions)
-    local alliance_changes = findDifferences(old_alliance_members, new_alliance_members)
-
-    -- Member joined an alliance party
-    if announce.member_joined_alliance and (new_p2_count > old_p2_count or new_p3_count > old_p3_count) then
-
-      for _, member in ipairs(alliance_changes.added) do
-        if member ~= '' then
-          msg = vana.member_joined_alliance
-          if msg then
-            msg = memberPlaceholder(msg, member)
-            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
-            playSound('member_joined_alliance')
-          end
-        else
-          -- If the name of the member hasn't loaded yet and thus comes back nil/empty,
-          -- set the party count back to it's original state to try again
-          new_party_structure.party2_count = party_structure.party2_count
-          new_party_structure.party3_count = party_structure.party3_count
-        end
-      end
-
-    -- Member left an alliance party
-    elseif announce.member_left_alliance and (new_p2_count < old_p2_count or new_p3_count < old_p3_count) then
-
-      for _, member in ipairs(alliance_changes.removed) do
-        if member ~= '' then
-          msg = vana.member_left_alliance
-          if msg then
-            msg = memberPlaceholder(msg, member)
-            add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
-            playSound('member_left_alliance')
-          end
-        else
-          -- If the name of the member hasn't loaded yet and thus comes back nil/empty,
-          -- set the party count back to it's original state to try again
-          new_party_structure.party2_count = party_structure.party2_count
-          new_party_structure.party3_count = party_structure.party3_count
-        end
-      end
-    end
-
-  -- Player becomes the alliance leader
-  elseif announce.you_are_now_alliance_leader and previously_in_alliance and not previously_alliance_leader and now_alliance_leader then
-
-    msg = vana.you_are_now_alliance_leader
-
-    if msg then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
-      playSound('now_alliance_leader')
-    end
-
-  -- Player becomes the party leader
-  elseif announce.you_are_now_party_leader and previously_in_party and not previously_party_leader and now_party_leader then
-
-    msg = vana.you_are_now_party_leader
-
-    if msg then
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
-      playSound('now_party_leader')
-    end
-
-  end
-
-  -- Save current states for future comparison
-  in_party = now_in_party
-  in_alliance = now_in_alliance
-  party_leader = now_party_leader
-  alliance_leader = now_alliance_leader
-  party_structure = new_party_structure
-
-end
-
 function checkAbilityReadyNotifications()
   print_debug( 'Checking abilities...') -- Debug line, can be removed later
 
@@ -1587,7 +1166,7 @@ function checkAbilityReadyNotifications()
   end
 end
 
-function countdownForPartyForLowMPChecks(player_job)
+function countdownForPartyLowMPChecks(player_job)
   print_debug( 'Checking party MP...') -- Debug line, can be removed later
 
   -- Coutdown for checking party for low mp
@@ -1615,7 +1194,7 @@ function countdownForVorsealChecks()
   end
 end
 
-function countdownForReraiseChecks()
+function countdownForReraiseChecks(player)
   print_debug( 'Checking Reraise...') -- Debug line, can be removed later
 
   -- Countdown for Reraise Check
@@ -1627,7 +1206,7 @@ function countdownForReraiseChecks()
 
       -- Check if we have reraise active
       local function reraiseActive()
-        local buffs = get_player().buffs
+        local buffs = player.buffs
         for _, buffId in ipairs(buffs) do
           if buffId == 113 then
             return true
@@ -1650,16 +1229,12 @@ function countdownForReraiseChecks()
 end
 
 -- Determine starting states on load / login
-function initialize()
+function initialize(player, party)
   print_debug('Initializing...') -- Debug line, can be removed later
-  -- Localise repeated global patterns
-  -- Should not be calling get_abc() multiple times.
-  local party = get_party()
-  local player = get_player()
 
   if not player then return end
 
-  -- Reset points on load / login
+  -- Reset states on load / login
   limit_points = 0
   merit_points = 0
   max_merit_points = 0
@@ -1667,29 +1242,8 @@ function initialize()
   cap_points = 0
   job_points = 500
   capped_jps = true
-
-  -- Update the party/alliance structure
-  party_structure = updatePartyStructure()
-  in_alliance = false
-
-  if party.alliance_leader then
-    in_alliance = true
-    in_party = true
-    if party.alliance_leader == player.id then
-      alliance_leader = true
-      party_leader = true
-    end
-  end
-
-  if not in_alliance then
-    in_party = false
-    if party.party1_leader then
-      in_party = true
-      if party.party1_leader == player.id then
-        party_leader = true
-      end
-    end
-  end
+  prev_state = build_state(player, party)
+  suppress_until = 0
 
   paused = false
 
@@ -1707,7 +1261,7 @@ register_event('load', function()
 
   if get_info().logged_in then
 
-    initialize()
+    initialize(get_player(), get_party())
     build_sound_cache()
     updateRecasts()
     firstRun()
@@ -1728,7 +1282,7 @@ register_event('login', function()
   -- Wait 5 seconds to let game values load
   coroutine.schedule(function()
 
-    initialize()
+    initialize(get_player(), get_party())
 
     paused = false
 
@@ -2045,7 +1599,7 @@ register_event('lose buff', function(buff)
   elseif (buff == 253 or buff == 256 or buff == 268 or buff == 512) and signet_wears_off then
 
     local function regionBuffActive()
-      local buffs = _w.ffxi.get_player().buffs
+      local buffs = get_player().buffs
       local regionBuffs = { [253] = true, [256] = true, [268] = true, [512] = true }
 
       for _, buffId in ipairs(buffs) do
@@ -2093,7 +1647,7 @@ register_event('job change', function()
 
 end)
 
--- Main time change event
+-- Heartbeat (time change) event
 -- ! "prerender" runs every frame (60) per second, stressing the lua thread.
 -- !   Due to the heavy function calls and table processing, with little to no
 -- !   update/refresh to UI components, this requirement isn't optimal.
@@ -2112,10 +1666,10 @@ register_event('time change', function(new, old)
 
   if not paused then -- Encapsulate all functionality within the paused check
 
-    -- Passed from the previous heartbeat to prevent calling APIs multiple times
-    -- ! Check is this more efficient or not.
-    logged_in = logged_in or get_info().logged_in
-    player = player or get_player()
+    local info = get_info()
+    local player = get_player()
+    local party = get_party()
+    local logged_in = info.logged_in
 
     if logged_in and player then
       print_debug('Player HP: '..tostring(player.vitals.hp)..', Alive: '..tostring(alive):upper())
@@ -2135,48 +1689,42 @@ register_event('time change', function(new, old)
       alive = true
     end
 
-    -- Track party/alliance structure changes
-    -- ! Consider moving this to incoming chunk event for party changes.
-    -- ! There isn't any reason to be calling this is there is no activity.
-    -- monitor("trackPartyStructure()", trackPartyStructure)
-    monitor("group_tracker()", group_tracker)
-
     -- Update recast timers
     monitor("updateRecasts()", updateRecasts)
 
     -- Check abilities are ready
     monitor("checkAbilityReadyNotifications()", checkAbilityReadyNotifications)
 
-    -- Check on Mog Locker lease expiration time once per hour
-    if heartbeat % 3600 == 0 then
+    if heartbeat % 3600 == 0 then -- Check every hour
+      -- Mog Locker lease expiration time
       monitor("checkMogLockerReminder()", checkMogLockerReminder)
     end
 
-    -- Check Sparks reminder every 10 minutes
-    -- ! Moved from every 1 minutes
-    if heartbeat % 600 == 0 then
+    if heartbeat % 600 == 0 then -- Check every 10 minutes
+      -- Sparks reminder
       monitor("checkSparksReminder()", checkSparksReminder)
-      -- Check if any Key Items are ready
-      -- ! Moved to check every minute rather than every heartbeat
+      -- Key Items reminder
       monitor("checkKIReminderTimestamps()", checkKIReminderTimestamps)
     end
 
-    -- Countdown for checking party for low mp
-    -- ! Moved to function call
-    monitor("countdownForPartyForLowMPChecks()", countdownForPartyForLowMPChecks, player.main_job)
+    if group_state.in_party or party.party1_count > 1 then -- Active party only executions
+      -- Track group structure
+      monitor("group_tracker()", group_tracker, info, player, party)
+      -- Countdown for checking party for low MP
+      monitor("countdownForPartyLowMPChecks()", countdownForPartyLowMPChecks, player.main_job)
+    end
 
-    -- Countdown for Vorseal Reminder
-    -- ! Moved to function call
+    -- Countdown for Vorseal Check
     monitor("countdownForVorsealChecks()", countdownForVorsealChecks)
+
+    -- Countdown for Reraise Check
+    monitor("countdownForReraiseChecks()", countdownForReraiseChecks, player)
 
     -- Countdown for Mireu (so we don't call "Mireu popped" when the battle is over)
     if mireu_popped and countdowns.mireu > 0 then
       countdowns.mireu = countdowns.mireu - 1
     end
 
-    -- Countdown for Reraise Check
-    -- ! Moved to function call
-    monitor("countdownForReraiseChecks()", countdownForReraiseChecks)
   end
 
 end)
@@ -2186,7 +1734,7 @@ register_event('addon command',function(addcmd, ...)
 
   if addcmd == 'help' or addcmd == nil then
 
-    local player = get_player()
+    player = player orget_player()
 
     local function getLastCheckDate()
 
