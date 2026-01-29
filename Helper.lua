@@ -1429,10 +1429,15 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
 
   local packet = packets.parse('incoming', original)
 
+  if debug_mode then
+    -- !! This floods the console, uncomment only for packet debugging
+    -- print_debug('Incoming Packet: ['..id..']')
+  end
+
   -- Menu/zone update packet
   if id == 0x063 then
 
-    local player = get_player()
+    -- local player = get_player()
 
     if player then
       limit_points = packet['Limit Points'] or limit_points
@@ -1441,7 +1446,10 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
       local job = player.main_job_full
       cap_points = packet[job..' Capacity Points'] or cap_points
       job_points = packet[job..' Job Points'] or job_points
-      add_to_chat(8, 'Limit Points: '..limit_points..', Merit Points: '..merit_points..'/'..max_merit_points..', '..job..' Capacity Points: '..cap_points..', '..job..' Job Points: '..job_points)
+
+      if debug_mode then
+        print_debug('Limit Points: '..limit_points..', Merit Points: '..merit_points..'/'..max_merit_points..', '..job..' Capacity Points: '..cap_points..', '..job..' Job Points: '..job_points)
+      end
     end
 
   -- Killed a monster packet
