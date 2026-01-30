@@ -116,6 +116,10 @@ Open the `/Helper/data/settings.xml` file to adjust these settings.
 
 ## Changelog
 
+Version 2.6.1-30b
+
+- Renamed addon (and command) to Vana.
+
 Version 2.6.1-29b
 
 - Added debug & performance monitoring.
