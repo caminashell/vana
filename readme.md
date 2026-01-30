@@ -74,9 +74,9 @@ Open the `./data/settings.xml` file to adjust these settings.
 | `reraise_check_delay_minutes` | Amount of time between each Reraise check. |
 | `reraise_check_not_in_town` | Will not alert you of Reraise missing if in a town zone. |
 | `sound_effects` | Play sound effects for alerts and notifications. |
-| `sparkolade_reminder` | A weekly reminder to use your Sparks and Accolades. Will play at login if the day/time passes while logged out. |
-| `sparkolade_reminder_day` | Day of the week the Sparkolade reminder will run.<br> - Is not case-sensitive and accepts full day names and common abbreviations such as `tu`, `tue`, and `tues`.<br> - Defaults to Saturday if unable to determine the day. |
-| `sparkolade_reminder_time` | Time the Sparkolade reminder will run.<br> - Time must be a number in military time, i.e., `1730` instead of `5:30 PM`.<br> - Defaults to `1200` if unable to determine time. |
+| `sparks_reminder` | A weekly reminder to use your Sparks and Accolades. Will play at login if the day/time passes while logged out. |
+| `sparks_reminder_day` | Day of the week the Sparks reminder will run.<br> - Is not case-sensitive and accepts full day names and common abbreviations such as `tu`, `tue`, and `tues`.<br> - Defaults to Saturday if unable to determine the day. |
+| `sparks_reminder_time` | Time the Sparkolade reminder will run.<br> - Time must be a number in military time, i.e., `1730` instead of `5:30 PM`.<br> - Defaults to `1200` if unable to determine time. |
 
 ------
 
