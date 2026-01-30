@@ -1,4 +1,4 @@
--- TODO: Rename addon module from "Helper" to "Vana" (added benefit: could be run side by side with original Helper)
+-- TODO: Clean up Vana push notification processing.
 -- TODO: Feature: Implement Besieged message alert.
 -- TODO: Feature: Implement current job checks for chat alerts (e.g., Looking for WHM, etc).
 -- TODO: Feature: Daily/Weekly task reset notices (Oseem, ROE, Monberaux, Sortie, Odyssey, Domain, etc).
@@ -6,10 +6,10 @@
 --[[ === THIS PROJECT IS IN DEVELOPMENT, NOT READY FOR USE === ]]--
 
 _addon = {
-  name = 'Vana (Helper)',
-  version = '2.6.1-29b',
+  name = 'Vana',
+  version = '2.6.1-30b',
   author = 'key (keylesta@valefor), caminashell (avestara@asura)',
-  commands = {'helper', 'vana'},
+  commands = {'vana'},
   description = 'An assistant that provides helpful event alerts and reminders to enhance experience in Final Fantasy XI. See README for details.',
 }
 
@@ -53,7 +53,7 @@ local defaults = {
     mog_locker_expiration = {},
     mog_locker_reminder = {},
     plate = {},
-    sparkss = 0,
+    sparks = 0,
   },
   options = {
     ability_ready = {
@@ -141,188 +141,180 @@ local defaults = {
   },
 }
 
+local settings = config.load(defaults)
+local options = settings.options
+local notifications = options.notifications
+
 local vana = {
+  _save_scheduled = false,
+  abilities = {
+    bestial_loyalty = "Bestial Loyalty",
+    blaze_of_glory = "Blaze of Glory",
+    call_wyvern = "Call Wyvern",
+    chivalry = "Chivalry",
+    convergence = "Convergence",
+    convert = "Convert",
+    crooked_cards = "Crooked Cards",
+    dematerialize = "Dematerialize",
+    devotion = "Devotion",
+    diffusion = "Diffusion",
+    divine_seal = "Divine Seal",
+    elemental_seal = "Elemental Seal",
+    embolden = "Embolden",
+    enmity_douse = "Enmity Douse",
+    entrust = "Entrust",
+    fealty = "Fealty",
+    flashy_shot = "Flashy Shot",
+    formless_strikes = "Formless Strikes",
+    life_cycle = "Life Cycle",
+    mana_wall = "Mana Wall",
+    manawell = "Manawell",
+    marcato = "Marcato",
+    martyr = "Martyr",
+    nightingale = "Nightingale",
+    random_deal = "Random Deal",
+    restraint = "Restraint",
+    sacrosanctity = "Sacrosanctity",
+    sp1 = "SP1",
+    sp2 = "SP2",
+    spontaneity = "Spontaneity",
+    tame = "Tame",
+    troubadour = "Troubadour",
+  },
+  alive = true,
+  cap_points = 0,
+  capped_jps = true,
+  capped_merits = true,
+  check_party_for_low_mp_toggle = true,
+  countdowns = {
+    check_party_for_low_mp = 0,
+    mireu = 0,
+    vorseal = -1,
+    reraise = math.floor(options.reraise_check_delay_minutes * 60),
+  },
+  debug_mode = false,
+  events = {
+    ability_ready = "${ability} is ready to use again.",
+    capped_job_points = "Your Job Points are now capped.",
+    capped_merit_points = "Your Merit Points are now capped.",
+    food_wears_off = "Your food has worn off.",
+    loot_rules_changed = "Looting rules have changed.",
+    member_joined_alliance = "${member} has joined the alliance.",
+    member_joined_party = "${member} has joined the party.",
+    member_left_alliance = "${member} has left the alliance.",
+    member_left_party = "${member} has left the party.",
+    mireu_popped = "Mireu was just mentioned in ${zone}.",
+    mog_locker_expiring = "Your Mog Locker lease is expiring soon.",
+    other_party_joined_alliance = "A party has joined the alliance.",
+    other_party_left_alliance = "A party has left the alliance.",
+    party_low_mp = "It looks like ${member} could use a ${refresh}.",
+    reminder_canteen = "Another Mystical Canteen should be available now.",
+    reminder_moglophone = "Another Moglophone should be available now.",
+    reminder_plate = "Another Shiny Ra'Kaznarian Plate should be available now.",
+    reraise_check = "You do not have Reraise on.",
+    reraise_wears_off = "Your Reraise effect has worn off.",
+    signet_wears_off = "Your ${signet} effect has worn off.",
+    sparks_reminder = "Don't forget to spend your Sparkss.",
+    sublimation_charged = "Sublimation is now fully charged and ready to use.",
+    vorseal_wearing = "You have about 10 minutes left on your Vorseal effect.",
+    you_are_now_alliance_leader = "You are now the alliance leader.",
+    you_are_now_party_leader = "You are now the party leader.",
+    you_joined_alliance = "You have joined an alliance.",
+    you_joined_party = "You have joined a party.",
+    you_left_alliance = "You have left the alliance.",
+    you_left_party = "You have left the party.",
+    your_party_joined_alliance = "Your party has joined an alliance.",
+    your_party_left_alliance = "Your party has left the alliance.",
+  },
+  group_state = {},
+  heartbeat = 0,
   info = {
-    name = "Vana",
     introduction = "I'll inform you of events and reminders to help enhance your experience!",
+    name = "Vana",
     name_color = 39,
     text_color = 220,
   },
-  ability_ready = "${ability} is ready to use again.",
-  capped_job_points = "Your Job Points are now capped.",
-  capped_merit_points = "Your Merit Points are now capped.",
-  food_wears_off = "Your food has worn off.",
-  mog_locker_expiring = "Your Mog Locker lease is expiring soon.",
-  reminder_canteen = "Another Mystical Canteen should be available now.",
-  reminder_moglophone = "Another Moglophone should be available now.",
-  reminder_plate = "Another Shiny Ra'Kaznarian Plate should be available now.",
-  party_low_mp = "It looks like ${member} could use a ${refresh}.",
-  reraise_check = "You do not have Reraise on.",
-  reraise_wears_off = "Your Reraise effect has worn off.",
-  signet_wears_off = "Your ${signet} effect has worn off.",
-  sparks_reminder = "Don't forget to spend your Sparkss.",
-  sublimation_charged = "Sublimation is now fully charged and ready to use.",
-  mireu_popped = "Mireu was just mentioned in ${zone}.",
-  member_joined_party = "${member} has joined the party.",
-  member_left_party = "${member} has left the party.",
-  member_joined_alliance = "${member} has joined the alliance.",
-  member_left_alliance = "${member} has left the alliance.",
-  vorseal_wearing = "You have about 10 minutes left on your Vorseal effect.",
-  you_joined_party = "You have joined a party.",
-  you_left_party = "You have left the party.",
-  you_joined_alliance = "You have joined an alliance.",
-  you_left_alliance = "You have left the alliance.",
-  your_party_joined_alliance = "Your party has joined an alliance.",
-  your_party_left_alliance = "Your party has left the alliance.",
-  other_party_joined_alliance = "A party has joined the alliance.",
-  other_party_left_alliance = "A party has left the alliance.",
-  you_are_now_alliance_leader = "You are now the alliance leader.",
-  you_are_now_party_leader = "You are now the party leader.",
-  loot_rules_changed = "Looting rules have changed."
+  job_points = 500,
+  limit_points = 0,
+  listeners = {},
+  max_merit_points = 0,
+  media_folder = addon_path.."media/",
+  merit_points = 0,
+  monitor_mode = false,
+  paused = false,
+  placeholder_cache = {},
+  prev_state = {},
+  ready = {
+    bestial_loyalty = true,
+    blaze_of_glory = true,
+    call_wyvern = true,
+    chivalry = true,
+    convergence = true,
+    convert = true,
+    crooked_cards = true,
+    dematerialize = true,
+    devotion = true,
+    diffusion = true,
+    divine_seal = true,
+    elemental_seal = true,
+    embolden = true,
+    enmity_douse = true,
+    entrust = true,
+    fealty = true,
+    flashy_shot = true,
+    formless_strikes = true,
+    life_cycle = true,
+    mana_wall = true,
+    manawell = true,
+    marcato = true,
+    martyr = true,
+    nightingale = true,
+    random_deal = true,
+    restraint = true,
+    sacrosanctity = true,
+    sp1 = true,
+    sp2 = true,
+    spontaneity = true,
+    tame = true,
+    troubadour = true,
+  },
+  recast = {},
+  settings = {
+    ability_ready = options.ability_ready,
+    after_zone_party_check_delay_seconds = math.floor(options.after_zone_party_check_delay_seconds),
+    capped_job_points = notifications.capped_job_points,
+    capped_merit_points = notifications.capped_merit_points,
+    check_party_for_low_mp = options.check_party_for_low_mp,
+    check_party_for_low_mp_delay_minutes = math.floor(options.check_party_for_low_mp_delay_minutes * 60),
+    first_run = settings.first_run,
+    food_wears_off = notifications.food_wears_off,
+    have_key_item = settings.have_key_item,
+    introduce_on_load = options.introduce_on_load,
+    key_item_ready = settings.key_item_ready,
+    key_item_reminders = options.key_item_reminders,
+    mireu_popped = notifications.mireu_popped,
+    mog_locker_expiring = notifications.mog_locker_expiring,
+    party_announcements = options.party_announcements,
+    reraise_check = options.reraise_check,
+    reraise_check_delay_minutes = math.floor(options.reraise_check_delay_minutes * 60),
+    reraise_check_not_in_town = options.reraise_check_not_in_town,
+    reraise_wears_off = notifications.reraise_wears_off,
+    signet_wears_off = notifications.signet_wears_off,
+    sound_effects = options.media.sound_effects,
+    sparks_reminder = options.sparks_reminder,
+    sparks_reminder_day = options.sparks_reminder_day,
+    sparks_reminder_time = options.sparks_reminder_time,
+    sublimation_charged = notifications.sublimation_charged,
+    timestamps = settings.timestamps,
+    vorseal_wearing = notifications.vorseal_wearing,
+  },
+  sound_cache = {},
+  suppress_until = 0,
+  zoned = false,
 }
-
-local settings = config.load(defaults)
-
--- TODO: Look at moving these definitions into the vana object (housekeeping)
-local first_run = settings.first_run
-local have_key_item = settings.have_key_item
-local key_item_ready = settings.key_item_ready
-local timestamps = settings.timestamps
-local options = settings.options
-
-local ability_ready = options.ability_ready
-local after_zone_party_check_delay_seconds = math.floor(options.after_zone_party_check_delay_seconds)
-local check_party_for_low_mp = options.check_party_for_low_mp
-local check_party_for_low_mp_delay_minutes = math.floor(options.check_party_for_low_mp_delay_minutes * 60)
-local introduce_on_load = options.introduce_on_load
-local key_item_reminders = options.key_item_reminders
-local notifications = options.notifications
-local party_announcements = options.party_announcements
-local reraise_check = options.reraise_check
-local reraise_check_delay_minutes = math.floor(options.reraise_check_delay_minutes * 60)
-local reraise_check_not_in_town = options.reraise_check_not_in_town
-local sound_effects = options.media.sound_effects
-local sparks_reminder = options.sparks_reminder
-local sparks_reminder_day = options.sparks_reminder_day
-local sparks_reminder_time = options.sparks_reminder_time
-
-local capped_job_points = notifications.capped_job_points
-local capped_merit_points = notifications.capped_merit_points
-local food_wears_off = notifications.food_wears_off
-local mireu_popped = notifications.mireu_popped
-local mog_locker_expiring = notifications.mog_locker_expiring
-local reraise_wears_off = notifications.reraise_wears_off
-local signet_wears_off = notifications.signet_wears_off
-local sublimation_charged = notifications.sublimation_charged
-local vorseal_wearing = notifications.vorseal_wearing
-
-local countdowns = {
-  check_party_for_low_mp = 0,
-  mireu = 0,
-  vorseal = -1,
-  reraise = reraise_check_delay_minutes,
-}
-
-local ready = {
-  bestial_loyalty = true,
-  blaze_of_glory = true,
-  call_wyvern = true,
-  chivalry = true,
-  convergence = true,
-  convert = true,
-  crooked_cards = true,
-  dematerialize = true,
-  devotion = true,
-  diffusion = true,
-  divine_seal = true,
-  elemental_seal = true,
-  embolden = true,
-  enmity_douse = true,
-  entrust = true,
-  fealty = true,
-  flashy_shot = true,
-  formless_strikes = true,
-  life_cycle = true,
-  mana_wall = true,
-  manawell = true,
-  marcato = true,
-  martyr = true,
-  nightingale = true,
-  random_deal = true,
-  restraint = true,
-  sacrosanctity = true,
-  sp1 = true,
-  sp2 = true,
-  spontaneity = true,
-  tame = true,
-  troubadour = true,
-}
-
-local abilities = {
-  bestial_loyalty = "Bestial Loyalty",
-  blaze_of_glory = "Blaze of Glory",
-  call_wyvern = "Call Wyvern",
-  chivalry = "Chivalry",
-  convergence = "Convergence",
-  convert = "Convert",
-  crooked_cards = "Crooked Cards",
-  dematerialize = "Dematerialize",
-  devotion = "Devotion",
-  diffusion = "Diffusion",
-  divine_seal = "Divine Seal",
-  elemental_seal = "Elemental Seal",
-  embolden = "Embolden",
-  enmity_douse = "Enmity Douse",
-  entrust = "Entrust",
-  fealty = "Fealty",
-  flashy_shot = "Flashy Shot",
-  formless_strikes = "Formless Strikes",
-  life_cycle = "Life Cycle",
-  mana_wall = "Mana Wall",
-  manawell = "Manawell",
-  marcato = "Marcato",
-  martyr = "Martyr",
-  nightingale = "Nightingale",
-  random_deal = "Random Deal",
-  restraint = "Restraint",
-  sacrosanctity = "Sacrosanctity",
-  sp1 = "SP1",
-  sp2 = "SP2",
-  spontaneity = "Spontaneity",
-  tame = "Tame",
-  troubadour = "Troubadour",
-}
-
-local recast = {}
-local heartbeat = 0
-local limit_points = 0
-local merit_points = 0
-local max_merit_points = 0
-local capped_merits = true
-local cap_points = 0
-local job_points = 500
-local capped_jps = true
-local prev_state = {}
-local suppress_until = 0
-
-local check_party_for_low_mp_toggle = true
-local zoned = false
-local paused = false
-local alive = true
-local media_folder = addon_path.."media/"
-
-local _save_scheduled = false
-local sound_cache = {}
-local placeholder_cache = {}
-
-local debug_mode = false
-local monitor_mode = false
-local group_state = {}
 
 -- !! START PROTOTYPE: State driven Group Event Listener
 -- https://github.com/Windower/Lua/wiki/
-
-local listeners = {}
 
 -- Utility function to count table length
 -- local function tablelength(T)
@@ -338,67 +330,67 @@ local function notify(msg,sfx)
 end
 
 local function on(event, fn)
-  listeners[event] = listeners[event] or {}
-  table.insert(listeners[event], fn)
+  vana.listeners[event] = vana.listeners[event] or {}
+  table.insert(vana.listeners[event], fn)
 end
 
-if party_announcements then
+if vana.settings.party_announcements then
 
   on('alliance_joined', function()
-      notify(vana.you_joined_alliance, 'you_joined_alliance')
+      notify(vana.events.you_joined_alliance, 'you_joined_alliance')
   end)
 
   on('party_joined', function()
-      notify(vana.you_joined_party, 'you_joined_party')
+      notify(vana.events.you_joined_party, 'you_joined_party')
   end)
 
   on('alliance_left', function()
-      notify(vana.you_left_alliance, 'you_left_alliance')
+      notify(vana.events.you_left_alliance, 'you_left_alliance')
   end)
 
   on('party_left', function()
-      notify(vana.you_left_party, 'you_left_party')
+      notify(vana.events.you_left_party, 'you_left_party')
   end)
 
   -- ! Double-check event
   on('party_moved', function()
-      -- notify(vana.your_party_joined_alliance, 'your_party_joined_alliance')
+      -- notify(vana.events.your_party_joined_alliance, 'your_party_joined_alliance')
       notify('check: party_moved event', 'notification')
   end)
 
   on('member_joined_party', function(name)
-      notify(memberPlaceholder(vana.member_joined_party, name), 'member_joined_party')
+      notify(memberPlaceholder(vana.events.member_joined_party, name), 'member_joined_party')
   end)
 
   on('member_joined_alliance', function(name)
-      notify(memberPlaceholder(vana.member_joined_alliance, name), 'member_joined_alliance')
+      notify(memberPlaceholder(vana.events.member_joined_alliance, name), 'member_joined_alliance')
   end)
 
   on('member_left_party', function(name)
-      notify(memberPlaceholder(vana.member_left_party, name), 'member_left_party')
+      notify(memberPlaceholder(vana.events.member_left_party, name), 'member_left_party')
   end)
 
   on('member_left_alliance', function(name)
-      notify(memberPlaceholder(vana.member_left_alliance, name), 'member_left_alliance')
+      notify(memberPlaceholder(vana.events.member_left_alliance, name), 'member_left_alliance')
   end)
 
   on('party_leader_changed', function(name)
-      notify(vana.you_are_now_party_leader, 'you_are_now_party_leader')
+      notify(vana.events.you_are_now_party_leader, 'you_are_now_party_leader')
   end)
 
   on('alliance_leader_changed', function(name)
-      notify(vana.you_are_now_alliance_leader, 'you_are_now_alliance_leader')
+      notify(vana.events.you_are_now_alliance_leader, 'you_are_now_alliance_leader')
   end)
 
   on('loot_rules_changed', function(name)
-      notify(vana.loot_rules_changed, 'loot_rules_changed')
+      notify(vana.events.loot_rules_changed, 'loot_rules_changed')
   end)
 
 end
 
 local function emit(event, ...)
-  if listeners[event] then
-    for _, fn in ipairs(listeners[event]) do
+  if vana.listeners[event] then
+    for _, fn in ipairs(vana.listeners[event]) do
       fn(...)
     end
   end
@@ -411,7 +403,7 @@ local function build_state(player, party)
     'a20','a21','a22','a23','a24','a25'
   }
 
-  group_state = {
+  vana.group_state = {
     in_party = false,
     in_alliance = false,
     party_leader = nil,
@@ -430,51 +422,59 @@ local function build_state(player, party)
     local member = party[position]
 
     if member and member.name then
-      group_state.members[member.name] = { position = position }
+      vana.group_state.members[member.name] = { position = position }
 
-      if debug_mode then
-        print_debug('Member: '..tostring(member.name)..', position: '..tostring(position))
+      if vana.debug_mode then
+        print_debug(
+          'Member: '..tostring(member.name)..
+          ', hp: '..tostring(member.hp)..' ('..tostring(member.hpp)..'%)'..
+          ', mp: '..tostring(member.mp)..' ('..tostring(member.mpp)..'%)'..
+          ', tp: '..tostring(member.tp)..
+          ', position: '..tostring(position)
+        )
       end
 
       -- Detect if you are in this party
       if member.name == player.name then
-        group_state.my_position = position
-        group_state.in_alliance = position:sub(1,1) ~= 'p'
-        if party.party1_count > 1 then group_state.in_party = position:sub(1,1) == 'p' end
+        vana.group_state.my_position = position
+        vana.group_state.in_alliance = position:sub(1,1) ~= 'p'
+        if party.party1_count > 1 then vana.group_state.in_party = position:sub(1,1) == 'p' end
       end
     end
   end
 
-  if debug_mode then
+  if vana.debug_mode then
     print_debug(
-      'My position: '..group_state.my_position..
-      ', in party: '..tostring(group_state.in_party)..
-      ', party leader: '..tostring(group_state.party_leader)..
+      'My position: '..vana.group_state.my_position..
+      ', in party: '..tostring(vana.group_state.in_party)..
+      ', party leader: '..tostring(party.party1_leader)..
       ', party counts: '..party.party1_count..
       ', '..party.party2_count..
       ', '..party.party3_count..
-      ', in alliance: '..tostring(group_state.in_alliance)..
-      ', alliance leader: '..tostring(group_state.alliance_leader)..
+      ', in alliance: '..tostring(vana.group_state.in_alliance)..
+      ', alliance leader: '..tostring(vana.group_state.alliance_leader)..
       ', alliance count: '..party.alliance_count
     )
   end
 
-  group_state.alliance_count = party.alliance_count
+  vana.group_state.alliance_count = party.alliance_count
 
   -- Party leader
-  if party.party1_leader then group_state.party_leader = party.party1_leader end
+  -- !! These do not necessarily check that the YOU ARE the leader...
+  -- !! Further refinement is needed to determine it.
+  if party.party1_leader then vana.group_state.party_leader = party.party1_leader end
   -- Alliance leader (usually a10)
-  if party.a10 and party.a10.name then group_state.alliance_leader = party.a10.name end
+  if party.a10 and party.a10.name then vana.group_state.alliance_leader = party.a10.name end
 
   -- Loot info
-  if party.party1_loot then group_state.loot.method = party.party1_loot end
-  if party.party1_lot then group_state.loot.lotting = party.party1_lot end
+  if party.party1_loot then vana.group_state.loot.method = party.party1_loot end
+  if party.party1_lot then vana.group_state.loot.lotting = party.party1_lot end
 
-  return group_state
+  return vana.group_state
 end
 
 local function group_tracker(info, player, party)
-  if debug_mode then print_debug('Checking group structure...') end
+  if vana.debug_mode then print_debug('Checking group structure...') end
 
   -- Exit if in a zone or player is not logged in
   if info and info.zoning or not player then return end
@@ -483,37 +483,37 @@ local function group_tracker(info, player, party)
   local curr_state = build_state(player, party)
 
   -- Self join / leave suppression
-  if prev_state.my_position ~= curr_state.my_position then
-    suppress_until = now + 0.3
-    prev_state = curr_state
+  if vana.prev_state.my_position ~= curr_state.my_position then
+    vana.suppress_until = now + 0.3
+    vana.prev_state = curr_state
     return
   end
 
-  if now < suppress_until then return end
+  if now < vana.suppress_until then return end
 
   -- group_state diff logic
   -- Self events
-  if not prev_state.in_party and curr_state.in_party then
+  if not vana.prev_state.in_party and curr_state.in_party then
     emit('party_joined')
-  elseif prev_state.in_party and not curr_state.in_party then
+  elseif vana.prev_state.in_party and not curr_state.in_party then
     emit('party_left')
   end
 
-  if not prev_state.in_alliance and curr_state.in_alliance then
+  if not vana.prev_state.in_alliance and curr_state.in_alliance then
     emit('alliance_joined')
-  elseif prev_state.in_alliance and not curr_state.in_alliance then
+  elseif vana.prev_state.in_alliance and not curr_state.in_alliance then
     emit('alliance_left')
   end
 
   -- Party <-> Alliance move
-  if prev_state.in_alliance and curr_state.in_alliance
-    and prev_state.my_position ~= curr_state.my_position then
-    emit('party_moved', prev_state.my_position, curr_state.my_position)
+  if vana.prev_state.in_alliance and curr_state.in_alliance
+    and vana.prev_state.my_position ~= curr_state.my_position then
+    emit('party_moved', vana.prev_state.my_position, curr_state.my_position)
   end
 
   -- Members join/leave party or alliance
   for member_name, member_info in pairs(curr_state.members) do
-    local prev_info = prev_state.members[member_name]
+    local prev_info = vana.prev_state.members[member_name]
     if not prev_info then
       if member_info.position:sub(1,1) == 'p' then
         emit('member_joined_party', member_name)
@@ -525,7 +525,7 @@ local function group_tracker(info, player, party)
     end
   end
 
-  for member_name, member_info in pairs(prev_state.members) do
+  for member_name, member_info in pairs(vana.prev_state.members) do
     if not curr_state.members[member_name] then
       if member_info.position:sub(1,1) == 'p' then
         emit('member_left_party', member_name)
@@ -536,23 +536,23 @@ local function group_tracker(info, player, party)
   end
 
   -- Leadership
-  if prev_state.party_leader ~= curr_state.party_leader
+  if vana.prev_state.party_leader ~= curr_state.party_leader
   and curr_state.alliance_count > 1 then
     emit('party_leader_changed', curr_state.party_leader)
   end
 
-  if prev_state.alliance_leader ~= curr_state.alliance_leader then
+  if vana.prev_state.alliance_leader ~= curr_state.alliance_leader then
     emit('alliance_leader_changed', curr_state.alliance_leader)
   end
 
   -- Loot rules
-  if prev_state.loot.method ~= curr_state.loot.method
-    or prev_state.loot.lotting ~= curr_state.loot.lotting then
+  if vana.prev_state.loot.method ~= curr_state.loot.method
+    or vana.prev_state.loot.lotting ~= curr_state.loot.lotting then
     emit('loot_rules_changed', curr_state.loot)
   end
 
   -- Update previous group_state
-  prev_state = curr_state
+  vana.prev_state = curr_state
 
 end
 
@@ -562,14 +562,14 @@ end
 
 -- Print debug messages to console if debug mode is enabled (default: false)
 function print_debug(msg)
-  if debug_mode then
+  if vana.debug_mode then
     print('[DEBUG] '..msg)
   end
 end
 
 -- Print rough profiling to console if monitor mode is enabled (default: false)
 function monitor(name, fn, ...)
-  if not monitor_mode then
+  if not vana.monitor_mode then
     return fn(...)
   else
     local start = os.clock()
@@ -584,12 +584,12 @@ end
 -- Reduces IO load and CPU load.
 function schedule_settings_save(delay)
   print_debug( 'Scheduling settings save...') -- Debug line, can be removed later
-  if _save_scheduled then return end
-  _save_scheduled = true
+  if vana._save_scheduled then return end
+  vana._save_scheduled = true
   delay = delay or 5
   coroutine.schedule(function()
     settings:save('all')
-    _save_scheduled = false
+    vana._save_scheduled = false
   end, delay)
 end
 
@@ -597,11 +597,11 @@ end
 -- Reduces filesystem reads and CPU load.
 function build_sound_cache()
   print_debug( 'Building sound cache...') -- Debug line, can be removed later
-  sound_cache = {}
+  vana.sound_cache = {}
   -- scan media_folder and helper folders once
-  local files = get_dir(media_folder) or {}
+  local files = get_dir(vana.media_folder) or {}
   for _, f in ipairs(files) do
-    sound_cache[f:lower()] = media_folder..f
+    vana.sound_cache[f:lower()] = vana.media_folder..f
   end
 end
 
@@ -609,18 +609,18 @@ end
 function format_message(template, key)
   print_debug( 'Formatting message...') -- Debug line, can be removed later
   local cache_key = template .. (key or '')
-  if placeholder_cache[cache_key] then return placeholder_cache[cache_key] end
+  if vana.placeholder_cache[cache_key] then return vana.placeholder_cache[cache_key] end
   local result = template:gsub('%${member}', key or '') -- expand as needed
-  placeholder_cache[cache_key] = result
+  vana.placeholder_cache[cache_key] = result
   return result
 end
 
 function firstRun()
   print_debug( 'Checking first run...') -- Debug line, can be removed later
   -- Exit if this isn't the first run
-  if not first_run then return end
+  if not vana.settings.first_run then return end
 
-  first_run = false
+  vana.settings.first_run = false
   settings.first_run = false
   schedule_settings_save()
 
@@ -635,22 +635,22 @@ end
 -- Play the correct sound
 function playSound(sound_name)
   print_debug( 'Playing sound...') -- Debug line, can be removed later
-  if not sound_effects then return end
+  if not vana.settings.sound_effects then return end
 
   local file_name = sound_name..".wav"
   local last_sound = 0
 
   if os.time() - last_sound > 0.2 then
-    if sound_cache[file_name:lower()] then
-      play_sound(sound_cache[file_name:lower()])
+    if vana.sound_cache[file_name:lower()] then
+      play_sound(vana.sound_cache[file_name:lower()])
 
-    elseif sound_cache[addon_path..file_name:lower()] then
+    elseif vana.sound_cache[addon_path..file_name:lower()] then
       play_sound(addon_path..file_name)
 
-    elseif sound_cache[("notification.wav"):lower()] then
-      play_sound(sound_cache[("notification.wav"):lower()])
+    elseif vana.sound_cache[("notification.wav"):lower()] then
+      play_sound(vana.sound_cache[("notification.wav"):lower()])
 
-    elseif sound_cache[(addon_path.."notification.wav"):lower()] then
+    elseif vana.sound_cache[(addon_path.."notification.wav"):lower()] then
       play_sound(addon_path.."notification.wav")
 
     end
@@ -673,8 +673,8 @@ function setSparksReminderTimestamp()
   }
 
   -- Get user-configured day and time, default to "Saturday 12:00"
-  local day_input = (sparks_reminder_day or "Saturday"):lower()
-  local time_input = tonumber(sparks_reminder_time) or 1200
+  local day_input = (vana.settings.sparks_reminder_day or "Saturday"):lower()
+  local time_input = tonumber(vana.settings.sparks_reminder_time) or 1200
 
   -- Convert the input day to a numeric day of the week
   local target_day = days_of_week[day_input]
@@ -710,7 +710,7 @@ function setSparksReminderTimestamp()
   local future_time = now + (days_until_next * 86400)  -- Add days in seconds
   local reminder_table = os.date("*t", future_time)  -- Get the correct date
 
-  -- Check if type is a table to protect conversion to timestamps
+  -- Check if type is a table to protect conversion to timestamp
   if type(reminder_table) ~= "table" then
     return
   end
@@ -724,8 +724,8 @@ function setSparksReminderTimestamp()
   local reminder_time = os.time(reminder_table)
 
   -- Save the new timestamp
-  settings.timestamps = settings.timestamps or {}
-  settings.timestamps.sparkss = reminder_time
+  vana.settings.timestamps = vana.settings.timestamps or {}
+  vana.settings.timestamps.sparks = reminder_time
   schedule_settings_save()
 
 end
@@ -733,24 +733,21 @@ end
 -- Check if the Sparks reminder should be triggered (called once per minute)
 function checkSparksReminder()
   print_debug( 'Checking Sparks reminder...') -- Debug line, can be removed later
-  if not sparks_reminder or not settings.timestamps or not settings.timestamps.sparkss then
+  if not vana.settings.sparks_reminder or not vana.settings.timestamps or not vana.settings.timestamps.sparks then
     return
   end
 
   local current_time = os.time()
 
   --Check if the reminder time has passed
-  if current_time >= settings.timestamps.sparkss then
+  if current_time >= vana.settings.timestamps.sparks then
 
-    if settings.timestamps.sparkss ~= 0 then
+    if vana.settings.timestamps.sparks ~= 0 then
 
-      local text = vana.sparks_reminder
-      if text then
-
-        add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
-
+      local msg = vana.events.sparks_reminder
+      if msg then
+        add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
         playSound('sparks_reminder')
-
       end
 
     end
@@ -764,7 +761,7 @@ end
 -- Save the time of the last check
 function saveLastCheckTime()
   print_debug( 'Saving last check time...') -- Debug line, can be removed later
-  timestamps.last_check = os.time()
+  vana.settings.timestamps.last_check = os.time()
   schedule_settings_save()
 end
 
@@ -782,7 +779,7 @@ function saveReminderTimestamp(key_item, key_item_reminder_repeat_hours)
 
   --Save the timestamp for X hours into the future
   local player = get_player()
-  timestamps[key_item][string.lower(player.name)] = os.time() + (hours * 60 * 60)
+  vana.settings.timestamps[key_item][string.lower(player.name)] = os.time() + (hours * 60 * 60)
   schedule_settings_save()
 end
 
@@ -818,22 +815,22 @@ function checkKIReminderTimestamps()
   --Loop through each tracked KI
   for key_item, id in pairs(tracked_items) do
 
-    if key_item_reminders[key_item] then
+    if vana.settings.key_item_reminders[key_item] then
 
       local player = get_player()
-      local reminder_time = timestamps[key_item][string.lower(player.name)] or 0
-      local have_ki = have_key_item[key_item][string.lower(player.name)] or false
+      local reminder_time = vana.settings.timestamps[key_item][string.lower(player.name)] or 0
+      local have_ki = vana.settings.have_key_item[key_item][string.lower(player.name)] or false
 
       --We just used the KI
       if have_ki and not haveKeyItem(id) then
-        have_key_item[key_item][string.lower(player.name)] = false
+        vana.settings.have_key_item[key_item][string.lower(player.name)] = false
         schedule_settings_save()
         saveReminderTimestamp(key_item) --Set the reminder time for 20 hours from now
 
       --We just received the KI again
       elseif not have_ki and haveKeyItem(id) then
-        have_key_item[key_item][string.lower(player.name)] = true
-        key_item_ready[key_item][string.lower(player.name)] = false
+        vana.settings.have_key_item[key_item][string.lower(player.name)] = true
+        vana.settings.key_item_ready[key_item][string.lower(player.name)] = false
         schedule_settings_save()
 
       --We do not yet have the KI
@@ -843,20 +840,17 @@ function checkKIReminderTimestamps()
         if reminder_time and reminder_time ~= 0 and current_time >= reminder_time then
 
           --KI is now ready
-          key_item_ready[key_item][string.lower(player.name)] = true
+          vana.settings.key_item_ready[key_item][string.lower(player.name)] = true
           schedule_settings_save()
 
-          local text = vana['reminder_'..key_item]
-          if text then
-
-            add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
-
+          local msg = vana['reminder_'..key_item]
+          if msg then
+            add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
             playSound('reminder_'..key_item)
-
           end
 
           --Reset the reminder time to repeat
-          saveReminderTimestamp(key_item, key_item_reminders[key_item..'_repeat_hours'])
+          saveReminderTimestamp(key_item, vana.settings.key_item_reminders[key_item..'_repeat_hours'])
 
         end
       end
@@ -867,7 +861,7 @@ end
 -- Check if the Mog Locker expiration reminder should be triggered (called once per hour)
 function checkMogLockerReminder()
   print_debug( 'Checking Mog Locker reminder...') -- Debug line, can be removed later
-  if not mog_locker_expiring then
+  if not vana.settings.mog_locker_expiring then
     return
   end
 
@@ -876,12 +870,12 @@ function checkMogLockerReminder()
   local one_day = 24 * 60 * 60  --24 hours in seconds
 
   local player = get_player()
-  local expiration_time = timestamps.mog_locker_expiration[string.lower(player.name)] or 0
-  local reminder_time = timestamps.mog_locker_reminder[string.lower(player.name)] or 0
+  local expiration_time = vana.settings.timestamps.mog_locker_expiration[string.lower(player.name)] or 0
+  local reminder_time = vana.settings.timestamps.mog_locker_reminder[string.lower(player.name)] or 0
 
   --Expiration is more than a week away, clear reminder timestamp
   if expiration_time - current_time > one_week then
-    timestamps.mog_locker_reminder[string.lower(player.name)] = 0
+    vana.settings.timestamps.mog_locker_reminder[string.lower(player.name)] = 0
     schedule_settings_save()
 
   --Expiration is under a week away
@@ -889,17 +883,14 @@ function checkMogLockerReminder()
 
     if current_time >= reminder_time then
 
-      local text = vana.mog_locker_expiring
-      if text then
-
-        add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
-
+      local msg = vana.events.mog_locker_expiring
+      if msg then
+        add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
         playSound('mog_locker_expiring')
-
       end
 
       --Update the reminder timestamp to trigger again in 24 hours
-      timestamps.mog_locker_reminder[string.lower(player.name)] = current_time + one_day
+      vana.settings.timestamps.mog_locker_reminder[string.lower(player.name)] = current_time + one_day
       schedule_settings_save()
 
     end
@@ -959,37 +950,37 @@ function updateRecasts()
 
   local ability_recast = get_ability_recasts()
 
-  recast.sp1 = ability_recast[0] and math.floor(ability_recast[0]) or 0
-  recast.sp2 = ability_recast[254] and math.floor(ability_recast[254]) or 0
-  recast.bestial_loyalty = ability_recast[94] and math.floor(ability_recast[94]) or 0
-  recast.blaze_of_glory = ability_recast[247] and math.floor(ability_recast[247]) or 0
-  recast.call_wyvern = ability_recast[163] and math.floor(ability_recast[163]) or 0
-  recast.chivalry = ability_recast[79] and math.floor(ability_recast[79]) or 0
-  recast.convergence = ability_recast[183] and math.floor(ability_recast[183]) or 0
-  recast.convert = ability_recast[49] and math.floor(ability_recast[49]) or 0
-  recast.crooked_cards = ability_recast[96] and math.floor(ability_recast[96]) or 0
-  recast.dematerialize = ability_recast[351] and math.floor(ability_recast[351]) or 0
-  recast.devotion = ability_recast[28] and math.floor(ability_recast[28]) or 0
-  recast.diffusion = ability_recast[184] and math.floor(ability_recast[184]) or 0
-  recast.divine_seal = ability_recast[26] and math.floor(ability_recast[26]) or 0
-  recast.elemental_seal = ability_recast[38] and math.floor(ability_recast[38]) or 0
-  recast.enmity_douse = ability_recast[34] and math.floor(ability_recast[34]) or 0
-  recast.entrust = ability_recast[93] and math.floor(ability_recast[93]) or 0
-  recast.fealty = ability_recast[78] and math.floor(ability_recast[78]) or 0
-  recast.flashy_shot = ability_recast[128] and math.floor(ability_recast[128]) or 0
-  recast.formless_strikes = ability_recast[20] and math.floor(ability_recast[20]) or 0
-  recast.life_cycle = ability_recast[246] and math.floor(ability_recast[246]) or 0
-  recast.mana_wall = ability_recast[39] and math.floor(ability_recast[39]) or 0
-  recast.manawell = ability_recast[35] and math.floor(ability_recast[35]) or 0
-  recast.marcato = ability_recast[48] and math.floor(ability_recast[48]) or 0
-  recast.martyr = ability_recast[27] and math.floor(ability_recast[27]) or 0
-  recast.nightingale = ability_recast[109] and math.floor(ability_recast[109]) or 0
-  recast.random_deal = ability_recast[196] and math.floor(ability_recast[196]) or 0
-  recast.restraint = ability_recast[9] and math.floor(ability_recast[9]) or 0
-  recast.sacrosanctity = ability_recast[33] and math.floor(ability_recast[33]) or 0
-  recast.spontaneity = ability_recast[37] and math.floor(ability_recast[37]) or 0
-  recast.tame = ability_recast[99] and math.floor(ability_recast[99]) or 0
-  recast.troubadour = ability_recast[110] and math.floor(ability_recast[110]) or 0
+  vana.recast.sp1 = ability_recast[0] and math.floor(ability_recast[0]) or 0
+  vana.recast.sp2 = ability_recast[254] and math.floor(ability_recast[254]) or 0
+  vana.recast.bestial_loyalty = ability_recast[94] and math.floor(ability_recast[94]) or 0
+  vana.recast.blaze_of_glory = ability_recast[247] and math.floor(ability_recast[247]) or 0
+  vana.recast.call_wyvern = ability_recast[163] and math.floor(ability_recast[163]) or 0
+  vana.recast.chivalry = ability_recast[79] and math.floor(ability_recast[79]) or 0
+  vana.recast.convergence = ability_recast[183] and math.floor(ability_recast[183]) or 0
+  vana.recast.convert = ability_recast[49] and math.floor(ability_recast[49]) or 0
+  vana.recast.crooked_cards = ability_recast[96] and math.floor(ability_recast[96]) or 0
+  vana.recast.dematerialize = ability_recast[351] and math.floor(ability_recast[351]) or 0
+  vana.recast.devotion = ability_recast[28] and math.floor(ability_recast[28]) or 0
+  vana.recast.diffusion = ability_recast[184] and math.floor(ability_recast[184]) or 0
+  vana.recast.divine_seal = ability_recast[26] and math.floor(ability_recast[26]) or 0
+  vana.recast.elemental_seal = ability_recast[38] and math.floor(ability_recast[38]) or 0
+  vana.recast.enmity_douse = ability_recast[34] and math.floor(ability_recast[34]) or 0
+  vana.recast.entrust = ability_recast[93] and math.floor(ability_recast[93]) or 0
+  vana.recast.fealty = ability_recast[78] and math.floor(ability_recast[78]) or 0
+  vana.recast.flashy_shot = ability_recast[128] and math.floor(ability_recast[128]) or 0
+  vana.recast.formless_strikes = ability_recast[20] and math.floor(ability_recast[20]) or 0
+  vana.recast.life_cycle = ability_recast[246] and math.floor(ability_recast[246]) or 0
+  vana.recast.mana_wall = ability_recast[39] and math.floor(ability_recast[39]) or 0
+  vana.recast.manawell = ability_recast[35] and math.floor(ability_recast[35]) or 0
+  vana.recast.marcato = ability_recast[48] and math.floor(ability_recast[48]) or 0
+  vana.recast.martyr = ability_recast[27] and math.floor(ability_recast[27]) or 0
+  vana.recast.nightingale = ability_recast[109] and math.floor(ability_recast[109]) or 0
+  vana.recast.random_deal = ability_recast[196] and math.floor(ability_recast[196]) or 0
+  vana.recast.restraint = ability_recast[9] and math.floor(ability_recast[9]) or 0
+  vana.recast.sacrosanctity = ability_recast[33] and math.floor(ability_recast[33]) or 0
+  vana.recast.spontaneity = ability_recast[37] and math.floor(ability_recast[37]) or 0
+  vana.recast.tame = ability_recast[99] and math.floor(ability_recast[99]) or 0
+  vana.recast.troubadour = ability_recast[110] and math.floor(ability_recast[110]) or 0
 
 end
 
@@ -1022,21 +1013,17 @@ function checkPartyForLowMP()
       --Check for high max MP, low mpp, and no existing Ballad or Refresh buff
       if estimated_max_mp > 1000 and member.mpp <= 25 then
 
-            local text = vana.party_low_mp
-        if text then
-
-          text = refreshPlaceholder(text,member.name,player_job)
-
-          add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
-
+        local msg = vana.events.party_low_mp
+        if msg then
+          msg = refreshPlaceholder(msg,member.name,player_job)
+          add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
           playSound('party_low_mp')
-
         end
 
         --Turn the toggle off so this can't be triggered again until it's turned back on
-        check_party_for_low_mp_toggle = false
+        vana.check_party_for_low_mp_toggle = false
         --Reset the countdown timer so we don't check again until ready
-        countdowns.check_party_for_low_mp = check_party_for_low_mp_delay_minutes
+        vana.countdowns.check_party_for_low_mp = vana.settings.check_party_for_low_mp_delay_minutes
 
       end
     end
@@ -1149,17 +1136,20 @@ function checkAbilityReadyNotifications()
   print_debug( 'Checking abilities...') -- Debug line, can be removed later
 
   -- Check if abilities are ready
-  for ability, enabled in pairs(ability_ready) do
+  for ability, enabled in pairs(vana.settings.ability_ready) do
     if enabled then
-      if recast[ability] and recast[ability] > 0 and ready[ability] then
-        ready[ability] = false
-      elseif recast[ability] == 0 and not ready[ability] then
-        local msg = vana.ability_ready
+      if vana.recast[ability]
+      and vana.recast[ability] > 0
+      and vana.ready[ability] then
+        vana.ready[ability] = false
+      elseif vana.recast[ability] == 0
+      and not vana.ready[ability] then
+        local msg = vana.events.ability_ready
         if msg then
-          msg = abilityPlaceholders(msg, abilities[ability])
+          msg = abilityPlaceholders(msg, vana.abilities[ability])
           add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
           playSound('ability_ready')
-          ready[ability] = true
+          vana.ready[ability] = true
         end
       end
     end
@@ -1170,11 +1160,13 @@ function countdownForPartyLowMPChecks(player_job)
   print_debug( 'Checking party MP...') -- Debug line, can be removed later
 
   -- Coutdown for checking party for low mp
-  if check_party_for_low_mp and (player_job == 'RDM' or player_job == 'BRD') then
-    if countdowns.check_party_for_low_mp > 0 then
-      countdowns.check_party_for_low_mp = countdowns.check_party_for_low_mp - 1
-    elseif countdowns.check_party_for_low_mp == 0 and not check_party_for_low_mp_toggle then
-      check_party_for_low_mp_toggle = true
+  if vana.settings.check_party_for_low_mp
+  and (player_job == 'RDM' or player_job == 'BRD') then
+    if vana.countdowns.check_party_for_low_mp > 0 then
+      vana.countdowns.check_party_for_low_mp = vana.countdowns.check_party_for_low_mp - 1
+    elseif vana.countdowns.check_party_for_low_mp == 0
+    and not vana.check_party_for_low_mp_toggle then
+      vana.check_party_for_low_mp_toggle = true
       checkPartyForLowMP()
     end
   end
@@ -1184,11 +1176,13 @@ function countdownForVorsealChecks()
   print_debug( 'Checking Vorseal...') -- Debug line, can be removed later
 
   -- Coutdown for checking Vorseal
-  if check_vorseal_reminder and vorseal_wearing then
-    if countdowns.vorseal > 0 then
-      countdowns.vorseal = countdowns.vorseal - 1
-    elseif countdowns.vorseal == 0 and not vorseal_wearing then
-      vorseal_wearing = true
+  if check_vorseal_reminder
+  and vana.settings.vorseal_wearing then
+    if vana.countdowns.vorseal > 0 then
+      vana.countdowns.vorseal = vana.countdowns.vorseal - 1
+    elseif vana.countdowns.vorseal == 0
+    and not vana.settings.vorseal_wearing then
+      vana.settings.vorseal_wearing = true
       checkVorsealReminder()
     end
   end
@@ -1198,11 +1192,12 @@ function countdownForReraiseChecks(player)
   print_debug( 'Checking Reraise...') -- Debug line, can be removed later
 
   -- Countdown for Reraise Check
-  if reraise_check and player.vitals.hp ~= 0 then
-    if countdowns.reraise > 0 then
-      countdowns.reraise = countdowns.reraise - 1
-    elseif countdowns.reraise == 0 then
-      countdowns.reraise = reraise_check_delay_minutes
+  if vana.settings.reraise_check
+  and player.vitals.hp ~= 0 then
+    if vana.countdowns.reraise > 0 then
+      vana.countdowns.reraise = vana.countdowns.reraise - 1
+    elseif vana.countdowns.reraise == 0 then
+      vana.countdowns.reraise = vana.settings.reraise_check_delay_minutes
 
       -- Check if we have reraise active
       local function reraiseActive()
@@ -1217,8 +1212,15 @@ function countdownForReraiseChecks(player)
 
       -- Only inform if reraise is not active and we are not in town
       -- !! This might be a gotcha due to DynamisD might need reraise to be active
-      if not reraiseActive() and (not reraise_check_not_in_town or (reraise_check_not_in_town and not isInTownZone())) then
-        local msg = vana.reraise_check
+      if not reraiseActive()
+      and (
+        not vana.settings.reraise_check_not_in_town
+        or (
+          vana.settings.reraise_check_not_in_town
+          and not isInTownZone()
+        )
+      ) then
+        local msg = vana.events.reraise_check
         if msg then
           add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
           playSound('reraise_check')
@@ -1235,17 +1237,16 @@ function initialize(player, party)
   if not player then return end
 
   -- Reset states on load / login
-  limit_points = 0
-  merit_points = 0
-  max_merit_points = 0
-  capped_merits = true
-  cap_points = 0
-  job_points = 500
-  capped_jps = true
-  prev_state = build_state(player, party)
-  suppress_until = 0
-
-  paused = false
+  vana.limit_points = 0
+  vana.merit_points = 0
+  vana.max_merit_points = 0
+  vana.capped_merits = true
+  vana.cap_points = 0
+  vana.job_points = 500
+  vana.capped_jps = true
+  vana.prev_state = build_state(player, party)
+  vana.suppress_until = 0
+  vana.paused = false
 
   -- Check if we've passed the Sparks reminder timestamp while logged out
   coroutine.schedule(function()
@@ -1266,7 +1267,7 @@ register_event('load', function()
     updateRecasts()
     firstRun()
 
-    if introduce_on_load then
+    if vana.settings.introduce_on_load then
       introduceHelper()
     end
 
@@ -1277,19 +1278,19 @@ end)
 -- Login
 register_event('login', function()
 
-  paused = true
+  vana.paused = true
 
   -- Wait 5 seconds to let game values load
   coroutine.schedule(function()
 
     initialize(get_player(), get_party())
 
-    paused = false
+    vana.paused = false
 
     updateRecasts()
     firstRun()
 
-    if introduce_on_load then
+    if vana.settings.introduce_on_load then
       introduceHelper()
     end
 
@@ -1308,7 +1309,7 @@ register_event('logout', function()
   in_alliance = false
   party_leader = false
   alliance_leader = false
-  paused = false
+  vana.paused = false
 end)
 
 -- Parse incoming packets
@@ -1318,7 +1319,7 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
 
   local packet = packets.parse('incoming', original)
 
-  if debug_mode then
+  if vana.debug_mode then
     -- !! This floods the console, uncomment only for packet debugging
     -- print_debug('Incoming Packet: ['..id..']')
   end
@@ -1329,15 +1330,23 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
     -- local player = get_player()
 
     if player then
-      limit_points = packet['Limit Points'] or limit_points
-      merit_points = packet['Merit Points'] or merit_points
-      max_merit_points = packet['Max Merit Points'] or max_merit_points
+      vana.limit_points = packet['Limit Points'] or vana.limit_points
+      vana.merit_points = packet['Merit Points'] or vana.merit_points
+      vana.max_merit_points = packet['Max Merit Points'] or vana.max_merit_points
       local job = player.main_job_full
-      cap_points = packet[job..' Capacity Points'] or cap_points
-      job_points = packet[job..' Job Points'] or job_points
+      vana.cap_points = packet[job..' Capacity Points'] or vana.cap_points
+      vana.job_points = packet[job..' Job Points'] or vana.job_points
 
-      if debug_mode then
-        print_debug('Limit Points: '..limit_points..', Merit Points: '..merit_points..'/'..max_merit_points..', '..job..' Capacity Points: '..cap_points..', '..job..' Job Points: '..job_points)
+      if vana.debug_mode then
+        print_debug(
+          'Limit Points: '..vana.limit_points..
+          ', Merit Points: '..vana.merit_points..
+          '/'..vana.max_merit_points..
+          ', '..job..
+          ' Capacity Points: '..vana.cap_points..
+          ', '..job..
+          ' Job Points: '..vana.job_points
+        )
       end
     end
 
@@ -1348,71 +1357,65 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
 
     if msg == 371 or msg == 372 then
       local lp_gained = packet['Param 1']
-      limit_points = limit_points + lp_gained
-      local merits_gained = math.floor(limit_points / 10000)
-      limit_points = limit_points - (merits_gained * 10000)
-      merit_points = merit_points + merits_gained >= max_merit_points and max_merit_points or merit_points + merits_gained
+      vana.limit_points = vana.limit_points + lp_gained
+      local merits_gained = math.floor(vana.limit_points / 10000)
+      vana.limit_points = vana.limit_points - (merits_gained * 10000)
+      vana.merit_points = vana.merit_points + merits_gained >= vana.max_merit_points
+      and vana.max_merit_points or vana.merit_points + merits_gained
 
     elseif msg == 718 or msg == 735 then
       local cp_gained = packet['Param 1']
-      cap_points = cap_points + cp_gained
-      local jp_gained = math.floor(cap_points / 30000)
-      cap_points = cap_points - (jp_gained * 30000)
-      job_points = job_points + jp_gained >= 500 and 500 or job_points + jp_gained
+      vana.cap_points = vana.cap_points + cp_gained
+      local jp_gained = math.floor(vana.cap_points / 30000)
+      vana.cap_points = vana.cap_points - (jp_gained * 30000)
+      vana.job_points = vana.job_points + jp_gained >= 500 and 500 or vana.job_points + jp_gained
 
     end
 
   elseif id == 0xB then -- Zone start
-    if get_info().logged_in and not zoned then
-      zoned = true
-      paused = true
+    if get_info().logged_in and not vana.zoned then
+      vana.zoned = true
+      vana.paused = true
     end
 
   elseif id == 0xA then -- Zone finish
-    if get_info().logged_in and zoned then
-      zoned = false
+    if get_info().logged_in and vana.zoned then
+      vana.zoned = false
       -- Short delay after zoning to prevent "left...joined" messages after every zone.
       coroutine.schedule(function()
-        paused = false
-      end, after_zone_party_check_delay_seconds)
+        vana.paused = false
+      end, vana.settingsafter_zone_party_check_delay_seconds)
     end
   end
 
-  if paused then return end
+  if vana.paused then return end
 
-  if capped_merit_points and merit_points == max_merit_points and not capped_merits then
-
-    capped_merits = true
-    local msg = vana.capped_merit_points
-
+  if vana.settings.capped_merit_points
+  and vana.merit_points == vana.max_merit_points
+  and not vana.capped_merits then
+    vana.capped_merits = true
+    local msg = vana.events.capped_merit_points
     if msg then
       add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
       playSound('capped_merit_points')
     end
 
-  elseif merit_points < max_merit_points and capped_merits then
-
-    capped_merits = false
-
+  elseif vana.merit_points < vana.max_merit_points and vana.capped_merits then
+    vana.capped_merits = false
   end
 
-  if capped_job_points and job_points == 500 and not capped_jps then
-
-    capped_jps = true
-
-    local text = vana.capped_job_points
-    if text then
-
-      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
-
+  if vana.settings.capped_job_points
+  and vana.job_points == 500
+  and not vana.capped_jps then
+    vana.capped_jps = true
+    local msg = vana.events.capped_job_points
+    if msg then
+      add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
       playSound('capped_job_points')
-
     end
 
-  elseif job_points < 500 and capped_jps then
-
-    capped_jps = false
-
+  elseif vana.job_points < 500 and vana.capped_jps then
+    vana.capped_jps = false
   end
 
 end)
@@ -1423,7 +1426,8 @@ register_event("incoming text", function(original,modified,original_mode)
   if original_mode == 148 then
 
     -- Match the lease expiration message and extract the date/time
-    local year, month, day, hour, minute, second = original:match("Your Mog Locker lease is valid until (%d+)/(%d+)/(%d+) (%d+):(%d+):(%d+), kupo%.")
+    local year, month, day, hour, minute, second =
+    original:match("Your Mog Locker lease is valid until (%d+)/(%d+)/(%d+) (%d+):(%d+):(%d+), kupo%.")
 
     -- Enforce number type of above variables
     year = tonumber(year) or 0
@@ -1446,20 +1450,18 @@ register_event("incoming text", function(original,modified,original_mode)
 
       -- Store the timestamp in the timestamps table
       local player = get_player()
-      timestamps.mog_locker_expiration[string.lower(player.name)] = lease_expiry_time
+      vana.settings.timestamps.mog_locker_expiration[string.lower(player.name)] = lease_expiry_time
       schedule_settings_save()
 
     end
   end
 
-  if original_mode == 212 and mireu_popped and countdowns.mireu == 0 then
+  if original_mode == 212
+  and vana.settings.mireu_popped
+  and vana.countdowns.mireu == 0 then
 
-    local dragons = {
-      'Azi Dahaka',
-      'Naga Raja',
-      'Quetzalcoatl',
-    }
-
+    local dragons = { 'Azi Dahaka', 'Naga Raja', 'Quetzalcoatl' }
+    local zones = { "Reisenjima", "Ru'Aun", "Zi'Tah" }
     local unity_leaders = {
       '{Aldo}',
       '{Apururu}',
@@ -1472,12 +1474,6 @@ register_event("incoming text", function(original,modified,original_mode)
       '{Pieuje}',
       '{Sylvie}',
       '{Yoran-Oran}',
-    }
-
-    local zones = {
-      "Reisenjima",
-      "Ru'Aun",
-      "Zi'Tah",
     }
 
     -- Extract all names enclosed in curly brackets
@@ -1517,25 +1513,20 @@ register_event("incoming text", function(original,modified,original_mode)
           end
 
           -- No dragon name is found, so therefore is Mireu
-          local text = vana.mireu_popped
-
-          if text then
-
+          local msg = vana.events.mireu_popped
+          if msg then
             if zone == "Zi'Tah" then
-              text = mireuPlaceholder(text, "Escha - Zi'Tah")
+              msg = mireuPlaceholder(msg, "Escha - Zi'Tah")
             elseif zone == "Ru'Aun" then
-              text = mireuPlaceholder(text, "Escha - Ru'Aun")
+              msg = mireuPlaceholder(msg, "Escha - Ru'Aun")
             else
-              text = mireuPlaceholder(text, zone)
+              msg = mireuPlaceholder(msg, zone)
             end
-
-            add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(text):color(vana.info.text_color))
-
+            add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
             playSound('mireu_popped')
-
           end
 
-          countdowns.mireu = 3900
+          vana.countdowns.mireu = 3900
           return
 
         end
@@ -1549,55 +1540,46 @@ end)
 
 -- Player gains a buff
 register_event('gain buff', function(buff)
-
-  if buff == 188 and sublimation_charged and not paused then -- Sublimation: Complete
-
-    local msg = vana.sublimation_charged
-
+  if buff == 188 and vana.settings.sublimation_charged and not vana.paused then -- Sublimation: Complete
+    local msg = vana.events.sublimation_charged
     if msg then
       add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
       playSound('ability_ready')
     end
 
-  elseif buff == 602 and vorseal_wearing then -- Vorseal
+  elseif buff == 602 and vana.settings.vorseal_wearing then -- Vorseal
     -- Set the countdown to 110 minutes (Vorseal lasts 2 hours)
-    countdowns.vorseal = 6600
+    vana.countdowns.vorseal = 6600
   end
 end)
 
 -- Player loses a buff
 register_event('lose buff', function(buff)
-
-  if buff == 602 and vorseal_wearing then -- Vorseal
+  if buff == 602 and vana.settings.vorseal_wearing then -- Vorseal
     -- Turn the countdown off
-    countdowns.vorseal = -1
+    vana.countdowns.vorseal = -1
   end
 
-  if paused or not alive then return end
+  if vana.paused or not vana.alive then return end
 
   -- Food
-  if buff == 251 and food_wears_off then
-
-    local msg = vana.food_wears_off
-
+  if buff == 251 and vana.settings.food_wears_off then
+    local msg = vana.events.food_wears_off
     if msg then
       add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
       playSound('food_wears_off')
     end
 
   -- Reraise
-  elseif buff == 113 and reraise_wears_off then
-
-    local msg = vana.reraise_wears_off
-
+  elseif buff == 113 and vana.settings.reraise_wears_off then
+    local msg = vana.events.reraise_wears_off
     if msg then
       add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
       playSound('reraise_wears_off')
     end
 
   -- Signet, Sanction, Sigil, Ionis
-  elseif (buff == 253 or buff == 256 or buff == 268 or buff == 512) and signet_wears_off then
-
+  elseif (buff == 253 or buff == 256 or buff == 268 or buff == 512) and vana.settings.signet_wears_off then
     local function regionBuffActive()
       local buffs = get_player().buffs
       local regionBuffs = { [253] = true, [256] = true, [268] = true, [512] = true }
@@ -1626,8 +1608,7 @@ register_event('lose buff', function(buff)
       return
     end
 
-    local msg = vana.signet_wears_off
-
+    local msg = vana.events.signet_wears_off
     if msg then
       msg = regionBuffType(msg)
       add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
@@ -1637,42 +1618,31 @@ register_event('lose buff', function(buff)
   end
 
 end)
+
 -- Player changes job
 register_event('job change', function()
-
   -- Prevents job changing from triggerring ability ready notifications
-  paused = true
+  vana.paused = true
   coroutine.sleep(3)
-  paused = false
-
+  vana.paused = false
 end)
 
 -- Heartbeat (time change) event
--- ! "prerender" runs every frame (60) per second, stressing the lua thread.
--- !   Due to the heavy function calls and table processing, with little to no
--- !   update/refresh to UI components, this requirement isn't optimal.
--- ! "time change" runs when the in-game world time changes (every ~3s).
--- !   Resulting in:
--- !     a much reduced polling rate & CPU time
--- !     less stress on the lua thread
--- !     less pressure on garbage collector
 -- TODO: This could still mean hitching experienced every 3 seconds...
 -- TODO: Investigate performance of processes in this event.
 register_event('time change', function(new, old)
+  vana.heartbeat = os.time()
 
-  heartbeat = os.time()
+  print_debug('=== Time Change Event (Heartbeat) === ['..vana.heartbeat..']') -- Debug line, can be removed later
 
-  print_debug('=== Time Change Event (Heartbeat) === ['..heartbeat..']') -- Debug line, can be removed later
-
-  if not paused then -- Encapsulate all functionality within the paused check
-
+  if not vana.paused then -- Encapsulate all functionality within the paused check
     local info = get_info()
     local player = get_player()
     local party = get_party()
     local logged_in = info.logged_in
 
     if logged_in and player then
-      print_debug('Player HP: '..tostring(player.vitals.hp)..', Alive: '..tostring(alive):upper())
+      print_debug('Player HP: '..tostring(player.vitals.hp)..', Alive: '..tostring(vana.alive):upper())
     else
       print_debug('Player not logged in.')
     end
@@ -1683,10 +1653,10 @@ register_event('time change', function(new, old)
     end
 
     -- The alive flag prevents a few things from happening when knocked out
-    if logged_in and player.vitals.hp == 0 and alive then
-      alive = false
-    elseif logged_in and player.vitals.hp > 0 and not alive then
-      alive = true
+    if logged_in and player.vitals.hp == 0 and vana.alive then
+      vana.alive = false
+    elseif logged_in and player.vitals.hp > 0 and not vana.alive then
+      vana.alive = true
     end
 
     -- Update recast timers
@@ -1695,22 +1665,20 @@ register_event('time change', function(new, old)
     -- Check abilities are ready
     monitor("checkAbilityReadyNotifications()", checkAbilityReadyNotifications)
 
-    if heartbeat % 3600 == 0 then -- Check every hour
-      -- Mog Locker lease expiration time
+    -- Check Mog Locker lease expiration time every hour
+    if vana.heartbeat % 3600 == 0 then
       monitor("checkMogLockerReminder()", checkMogLockerReminder)
     end
 
-    if heartbeat % 600 == 0 then -- Check every 10 minutes
-      -- Sparks reminder
+     -- Check Sparks reminder + Key Items reminder every 10 minutes
+    if vana.heartbeat % 600 == 0 then
       monitor("checkSparksReminder()", checkSparksReminder)
-      -- Key Items reminder
       monitor("checkKIReminderTimestamps()", checkKIReminderTimestamps)
     end
 
-    if group_state.in_party or party.party1_count > 1 then -- Active party only executions
-      -- Track group structure
+     -- Party only executions: Track group structure + Countdown for checking party for low MP
+    if vana.group_state.in_party or party.party1_count > 1 then
       monitor("group_tracker()", group_tracker, info, player, party)
-      -- Countdown for checking party for low MP
       monitor("countdownForPartyLowMPChecks()", countdownForPartyLowMPChecks, player.main_job)
     end
 
@@ -1721,8 +1689,8 @@ register_event('time change', function(new, old)
     monitor("countdownForReraiseChecks()", countdownForReraiseChecks, player)
 
     -- Countdown for Mireu (so we don't call "Mireu popped" when the battle is over)
-    if mireu_popped and countdowns.mireu > 0 then
-      countdowns.mireu = countdowns.mireu - 1
+    if vana.settings.mireu_popped and vana.countdowns.mireu > 0 then
+      vana.countdowns.mireu = vana.countdowns.mireu - 1
     end
 
   end
@@ -1733,38 +1701,29 @@ end)
 register_event('addon command',function(addcmd, ...)
 
   if addcmd == 'help' or addcmd == nil then
-
     player = player or get_player()
 
     local function getLastCheckDate()
-
-      if not timestamps.last_check or timestamps.last_check == 0 then
+      if not vana.settings.timestamps.last_check or vana.settings.timestamps.last_check == 0 then
         return "Never"
       end
-
       -- Convert the timestamp into a readable date
-      return os.date("%a, %b %d, %I:%M %p", timestamps.last_check)
-
+      return os.date("%a, %b %d, %I:%M %p", vana.settings.timestamps.last_check)
     end
 
     local function getKeyItemReady(ki)
 
-      if have_key_item[ki][string.lower(player.name)] then
-
+      if vana.settings.have_key_item[ki][string.lower(player.name)] then
         local response = {text = "Have KI", color = 6}
         return response
-
-      elseif key_item_ready[ki][string.lower(player.name)] then
-
+      elseif vana.settings.key_item_ready[ki][string.lower(player.name)] then
         local response = {text = "Ready to pickup!", color = 2}
         return response
-
       end
 
       -- Convert the timestamp into a readable date
-      local response = {text = os.date("%a, %b %d, %I:%M %p", timestamps[ki][string.lower(player.name)]), color = 28}
+      local response = {text = os.date("%a, %b %d, %I:%M %p", vana.settings.timestamps[ki][string.lower(player.name)]), color = 28}
       return response
-
     end
 
     local last_check_date = getLastCheckDate()
@@ -1785,52 +1744,40 @@ register_event('addon command',function(addcmd, ...)
     add_to_chat(8,('         sound/s '):color(36)..('- Toggle sounds on/off.'):color(8))
 
   elseif addcmd == "sounds" or addcmd == "sound" or addcmd == "s" then
-
-    if sound_effects then
-
-      settings.options.sound_effects = false
-      sound_effects = false
+    if vana.settings.sound_effects then
+      vana.settings.sound_effects = false
       add_to_chat(8,('[Vana] '):color(220)..('Sound Mode: '):color(8)..('Off'):color(1):upper())
-
     else
-
-      settings.options.sound_effects = true
-      sound_effects = true
+      vana.settings.sound_effects = true
       add_to_chat(8,('[Vana] '):color(220)..('Sound Mode: '):color(8)..('On'):color(1):upper())
-
     end
 
     schedule_settings_save()
 
   elseif addcmd == "debug" then
+    vana.debug_mode = not vana.debug_mode
 
-    debug_mode = not debug_mode
-
-    if debug_mode then
+    if vana.debug_mode then
       add_to_chat(8,('[Vana] '):color(220)..('Debug Mode: '):color(8)..('On'):color(1):upper())
     else
       add_to_chat(8,('[Vana] '):color(220)..('Debug Mode: '):color(8)..('Off'):color(1):upper())
     end
 
   elseif addcmd == "monitor" then
+    vana.monitor_mode = not vana.monitor_mode
 
-    monitor_mode = not monitor_mode
-
-    if monitor_mode then
+    if vana.monitor_mode then
       add_to_chat(8,('[Vana] '):color(220)..('Monitor Mode: '):color(8)..('On'):color(1):upper())
     else
       add_to_chat(8,('[Vana] '):color(220)..('Monitor Mode: '):color(8)..('Off'):color(1):upper())
     end
 
   elseif addcmd == "test" then
-
     add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..('This is a test notification!'):color(vana.info.text_color))
     playSound('notification')
 
   else
-
     add_to_chat(8,('[Vana] '):color(220)..('Unrecognized command. Type'):color(8)..(' //helper help'):color(1)..(' for a list of commands.'):color(8))
-
   end
 end)
 

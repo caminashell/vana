@@ -81,7 +81,7 @@ For more info, see the [original Helper addon](https://github.com/iLVL-Key/FFXI/
 
 ## Commands
 
-All commands must be preceded with  `//vana` or `//helper`
+All commands must be preceded with  `//vana`
 `<required>` `[optional]`
 
 | Command | Description |
@@ -92,7 +92,7 @@ All commands must be preceded with  `//vana` or `//helper`
 
 ## Options
 
-Open the `/Helper/data/settings.xml` file to adjust these settings.
+Open the `./data/settings.xml` file to adjust these settings.
 
 | Option | Description |
 |--------|-------------|
@@ -119,6 +119,29 @@ Open the `/Helper/data/settings.xml` file to adjust these settings.
 Version 2.6.1-30b
 
 - Renamed addon (and command) to Vana.
+- Updated readme.
+- Moved all transactional definitions to vana data object.
+  - This could come in handy for dumping dataset to a file or log if needed.
+  - Also reduces definition clutter.
+    - If vana's data is corrupted or misconfigured, it will break - expected.
+    - Risk: arguably a single point of failure.
+    - Garbage collection memory consumption appears unaffected.
+  - Some functionality tests look okay:
+    - Party/alliance structure tracking is still functional.
+    - Ability ready notifications are still functional.
+    - Region buffs (Signet, Sanction, Sigil, Ionis) are still functional.
+  - Untested:
+    - Merit points capped notifications.
+    - Mog locker lease expiring notifications.
+    - Reraise check notifications.
+    - Mireu popped notifications.
+    - Party leader change notifications.
+    - Alliance leader change notifications.
+    - Loot rules change notifications.
+- Additional debug logging added for party/alliance structure tracking.
+- Some code cleanup.
+- Party leader check fixed.
+  - Needs further refinement.
 
 Version 2.6.1-29b
 
