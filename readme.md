@@ -114,6 +114,20 @@ Open the `./data/settings.xml` file to adjust these settings.
 
 ------
 
+## Feature Ideas
+
+- Low ninjutsu tool alerts.
+- Stealth wearing alerts.
+- Bazaar state purchase notifications & command list.
+- Monster agression intel on check (exclude battle arenas).
+- Notorious Monsters (NM) appearance alerts.
+- ~~Auto warp(ring) safety if in hostile areas, e.g. after idle for 1hr.~~
+- Doze/AFK message alert when in group.. e.g. every 10 minutes.
+- Implement Besieged message alert.
+- Implement current job checks for chat alerts (e.g., Looking for WHM, etc).
+- Daily/Weekly task reset notices (Oseem, ROE, Monberaux, Sortie, Odyssey, Domain, etc).
+
+
 ## Changelog
 
 Version 2.6.1-30b

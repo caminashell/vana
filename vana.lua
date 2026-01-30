@@ -1,7 +1,13 @@
 -- TODO: Clean up Vana push notification processing.
--- TODO: Feature: Implement Besieged message alert.
--- TODO: Feature: Implement current job checks for chat alerts (e.g., Looking for WHM, etc).
--- TODO: Feature: Daily/Weekly task reset notices (Oseem, ROE, Monberaux, Sortie, Odyssey, Domain, etc).
+-- TODO: Feature Idea: Low ninjutsu tool alerts.
+-- TODO: Feature Idea: Stealth wearing alerts.
+-- TODO: Feature Idea: Bazaar state purchase notifications & command list.
+-- TODO: Feature Idea: Monster agression intel on check (exclude battle arenas).
+-- TODO: Feature Idea: Notorious Monsters (NM) appearance alerts.
+-- TODO: Feature Idea: Doze/AFK message alert when in group.. e.g. every 10 minutes.
+-- TODO: Feature Idea: Implement Besieged message alert.
+-- TODO: Feature Idea: Implement current job checks for chat alerts (e.g., Looking for WHM, etc).
+-- TODO: Feature Idea: Daily/Weekly task reset notices (Oseem, ROE, Monberaux, Sortie, Odyssey, Domain, etc).
 
 --[[ === THIS PROJECT IS IN DEVELOPMENT, NOT READY FOR USE === ]]--
 
@@ -1384,7 +1390,7 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
       -- Short delay after zoning to prevent "left...joined" messages after every zone.
       coroutine.schedule(function()
         vana.paused = false
-      end, vana.settingsafter_zone_party_check_delay_seconds)
+      end, vana.settings.after_zone_party_check_delay_seconds)
     end
   end
 
