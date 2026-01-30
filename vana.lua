@@ -14,7 +14,7 @@
 _addon = {
   name = 'Vana',
   version = '2.6.1-30b',
-  author = 'key (keylesta@valefor), caminashell (avestara@asura)',
+  author = 'key [keylesta@valefor], caminashell [avestara@asura]',
   commands = {'vana'},
   description = 'An assistant that provides helpful event alerts and reminders to enhance experience in Final Fantasy XI. See README for details.',
 }
@@ -28,19 +28,20 @@ math.randomseed(os.time())
 
 --[[ === DEFINITIONS === ]]---
 
-local _w = windower
-local addon_path = _w.addon_path
-local add_to_chat = _w.add_to_chat
-local get_ability_recasts = _w.ffxi.get_ability_recasts
-local get_dir = _w.get_dir
-local get_info = _w.ffxi.get_info
-local get_key_items = _w.ffxi.get_key_items
-local get_party = _w.ffxi.get_party
-local get_player = _w.ffxi.get_player
-local register_event = _w.register_event
-local play_sound = _w.play_sound
+_w = windower
+addon_path = _w.addon_path
+add_to_chat = _w.add_to_chat
+get_ability_recasts = _w.ffxi.get_ability_recasts
+get_dir = _w.get_dir
+get_info = _w.ffxi.get_info
+get_key_items = _w.ffxi.get_key_items
+get_party = _w.ffxi.get_party
+get_player = _w.ffxi.get_player
+register_event = _w.register_event
+play_sound = _w.play_sound
 
-local defaults = {
+-- Define defaults for Vana
+defaults = {
   first_run = true,
   have_key_item = {
     canteen = {},
@@ -147,11 +148,13 @@ local defaults = {
   },
 }
 
-local settings = config.load(defaults)
-local options = settings.options
-local notifications = options.notifications
+-- Bridge settings data from defaults
+settings = config.load(defaults)
+options = settings.options
+notifications = options.notifications
 
-local vana = {
+-- Define initial state for Vana
+vana = {
   _save_scheduled = false,
   abilities = {
     bestial_loyalty = "Bestial Loyalty",
@@ -188,6 +191,11 @@ local vana = {
     troubadour = "Troubadour",
   },
   alive = false,
+  cache = {
+    info = {},
+    party = {},
+    player = {},
+  },
   cap_points = 0,
   capped_jps = true,
   capped_merits = true,
@@ -381,13 +389,13 @@ function vana_dump()
   dump_data(vana, 'debug_vana.json')
 end
 
-local function notify(msg,sfx)
+function notify(msg,sfx)
   if not msg then return end
   add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
   playSound(sfx)
 end
 
-local function on(event, fn)
+function on(event, fn)
   vana.listeners[event] = vana.listeners[event] or {}
   table.insert(vana.listeners[event], fn)
 end
@@ -446,7 +454,7 @@ if vana.settings.party_announcements then
 
 end
 
-local function emit(event, ...)
+function emit(event, ...)
   if vana.listeners[event] then
     for _, fn in ipairs(vana.listeners[event]) do
       fn(...)
@@ -454,7 +462,7 @@ local function emit(event, ...)
   end
 end
 
-local function build_state(player, party)
+function build_state(player, party)
   if debug_mode then print_debug('Building group state...') end
 
   local party_positions = {
@@ -533,7 +541,7 @@ local function build_state(player, party)
   return vana.group_state
 end
 
-local function group_tracker(info, player, party)
+function group_tracker(info, player, party)
   if vana.debug_mode then print_debug('Checking group structure...') end
 
   -- Exit if in a zone or player is not logged in
@@ -960,13 +968,13 @@ end
 -- Check if the player is in a town zone
 function isInTownZone()
   print_debug( 'Checking if in town zone...') -- Debug line, can be removed later
-  local current_zone = res.zones[get_info().zone].name
+  local current_zone = res.zones[vana.cache.info.zone].name
   local town_zones = {
     'Western Adoulin','Eastern Adoulin','Celennia Memorial Library','Silver Knife','Bastok Markets','Bastok Mines','Metalworks','Port Bastok','Chateau d\'Oraguille','Northern San d\'Oria','Port San d\'Oria','Southern San d\'Oria','Heavens Tower','Port Windurst','Windurst Walls','Windurst Waters','Windurst Woods','Lower Jeuno','Port Jeuno','Ru\'Lude Gardens','Upper Jeuno','Aht Urhgan Whitegate','The Colosseum','Tavnazian Safehold','Southern San d\'Oria [S]','Bastok Markets [S]','Windurst Waters [S]','Mhaura','Selbina','Rabao','Kazham','Norg','Nashmau','Mog Garden','Leafallia','Chocobo Circuit'
     }
 
   --If in a mog house, return true (mostly just for Al Zahbi MH)
-  if get_info().mog_house then
+  if vana.cache.info.mog_house then
     return true
   end
 
@@ -1321,9 +1329,14 @@ end
 register_event('load', function()
   print_debug('=== Re/Load Event === ') -- Debug line, can be removed later
 
-  if get_info().logged_in then
+  -- Snapshot data into vana namespace (local cache)
+  vana.cache.info = get_info()
+  vana.cache.player = get_player()
+  vana.cache.party = get_party()
 
-    initialize(get_player(), get_party())
+  if vana.cache.info.logged_in then
+
+    initialize(vana.cache.player, vana.cache.party)
     build_sound_cache()
     updateRecasts()
     firstRun()
@@ -1342,10 +1355,15 @@ register_event('login', function()
 
   vana.paused = true
 
+  -- Snapshot data into vana namespace (local cache)
+  vana.cache.info = get_info()
+  vana.cache.player = get_player()
+  vana.cache.party = get_party()
+
   -- Wait 5 seconds to let game values load
   coroutine.schedule(function()
 
-    initialize(get_player(), get_party())
+    initialize(vana.cache.player, vana.cache.party)
 
     vana.paused = false
 
@@ -1368,12 +1386,16 @@ end)
 register_event('logout', function()
   print_debug('=== Logout Event ===') -- Debug line, can be removed later
 
-  party_structure = {}
-  in_party = false
-  in_alliance = false
-  party_leader = false
-  alliance_leader = false
+  -- Reset vana states
+  vana.cache = {}
+  vana.group_state.in_party = false
+  vana.group_state.in_alliance = false
+  vana.group_state.party_leader = false
+  vana.group_state.alliance_leader = false
   vana.paused = false
+  vana.alive = false
+  vana.zoned = false
+
 end)
 
 -- Parse incoming packets
@@ -1385,21 +1407,15 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
 
   local packet = packets.parse('incoming', original)
 
-  if vana.debug_mode then
-    -- !! This floods the console, uncomment only for packet debugging
-    -- print_debug('Incoming Packet: ['..id..']')
-  end
-
   -- Menu/zone update packet
   if id == 0x063 then
 
-    -- local player = get_player()
+    if vana.cache.player then
+      local job = vana.cache.player.main_job_full
 
-    if player then
       vana.limit_points = packet['Limit Points'] or vana.limit_points
       vana.merit_points = packet['Merit Points'] or vana.merit_points
       vana.max_merit_points = packet['Max Merit Points'] or vana.max_merit_points
-      local job = player.main_job_full
       vana.cap_points = packet[job..' Capacity Points'] or vana.cap_points
       vana.job_points = packet[job..' Job Points'] or vana.job_points
 
@@ -1439,13 +1455,13 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
     end
 
   elseif id == 0xB then -- Zone start
-    if get_info().logged_in and not vana.zoned then
+    if vana.cache.info.logged_in and not vana.zoned then
       vana.zoned = true
       vana.paused = true
     end
 
   elseif id == 0xA then -- Zone finish
-    if get_info().logged_in and vana.zoned then
+    if vana.cache.info.logged_in and vana.zoned then
       vana.zoned = false
       -- Short delay after zoning to prevent "left...joined" messages after every zone.
       coroutine.schedule(function()
@@ -1704,8 +1720,11 @@ end)
 -- TODO: This could still mean hitching experienced every 3 seconds...
 -- TODO: Investigate performance of processes in this event.
 register_event('time change', function(new, old)
-  local info = get_info()
-  local player = get_player()
+  -- Snapshot data into vana namespace (local cache)
+  vana.cache.info = get_info()
+  vana.cache.player = get_player()
+  info = vana.cache.info
+  player = vana.cache.player
 
   -- Exit if player is non-existant, or vana is paused.
   if not info.logged_in
@@ -1716,8 +1735,9 @@ register_event('time change', function(new, old)
     print_debug('Vana is paused.')
     return
   else
-    local party = get_party()
+    vana.cache.party = get_party()
     vana.heartbeat = os.time()
+    party = vana.cache.party
 
     print_debug('=== Time Change Event (Heartbeat) === ['..vana.heartbeat..']') -- Debug line, can be removed later
     print_debug(
