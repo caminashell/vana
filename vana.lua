@@ -187,7 +187,7 @@ local vana = {
     tame = "Tame",
     troubadour = "Troubadour",
   },
-  alive = true,
+  alive = false,
   cap_points = 0,
   capped_jps = true,
   capped_merits = true,
@@ -403,6 +403,8 @@ local function emit(event, ...)
 end
 
 local function build_state(player, party)
+  if debug_mode then print_debug('Building group state...') end
+
   local party_positions = {
     'p0','p1','p2','p3','p4','p5',
     'a10','a11','a12','a13','a14','a15',
@@ -486,7 +488,7 @@ local function group_tracker(info, player, party)
   if info and info.zoning or not player then return end
 
   local now = os.clock()
-  local curr_state = build_state(player, party)
+  local curr_state = monitor('build_state()', build_state, player, party)
 
   -- Self join / leave suppression
   if vana.prev_state.my_position ~= curr_state.my_position then
@@ -1250,7 +1252,7 @@ function initialize(player, party)
   vana.cap_points = 0
   vana.job_points = 500
   vana.capped_jps = true
-  vana.prev_state = build_state(player, party)
+  vana.prev_state = monitor('build_state()', build_state, player, party)
   vana.suppress_until = 0
   vana.paused = false
 
@@ -1265,6 +1267,7 @@ end
 
 -- Load / Reload
 register_event('load', function()
+  print_debug('=== Re/Load Event === ') -- Debug line, can be removed later
 
   if get_info().logged_in then
 
@@ -1283,6 +1286,7 @@ end)
 
 -- Login
 register_event('login', function()
+  print_debug('=== Login Event ===') -- Debug line, can be removed later
 
   vana.paused = true
 
@@ -1310,6 +1314,8 @@ end)
 
 -- Logout (reset starting states)
 register_event('logout', function()
+  print_debug('=== Logout Event ===') -- Debug line, can be removed later
+
   party_structure = {}
   in_party = false
   in_alliance = false
@@ -1320,6 +1326,8 @@ end)
 
 -- Parse incoming packets
 register_event('incoming chunk', function(id, original, modified, injected, blocked)
+  -- !! This floods the console, uncomment only for packet debugging
+  -- print_debug('=== Incoming Chunk Event ===') -- Debug line, can be removed later
 
   if injected or blocked then return end
 
@@ -1428,6 +1436,7 @@ end)
 
 -- Parses incoming text for Mog locker lease messages and Mireu pop messages
 register_event("incoming text", function(original,modified,original_mode)
+  print_debug('=== Incoming Text Event ===') -- Debug line, can be removed later
 
   if original_mode == 148 then
 
@@ -1546,6 +1555,8 @@ end)
 
 -- Player gains a buff
 register_event('gain buff', function(buff)
+  print_debug('=== Gain Buff Event ===') -- Debug line, can be removed later
+
   if buff == 188 and vana.settings.sublimation_charged and not vana.paused then -- Sublimation: Complete
     local msg = vana.events.sublimation_charged
     if msg then
@@ -1561,6 +1572,8 @@ end)
 
 -- Player loses a buff
 register_event('lose buff', function(buff)
+  print_debug('=== Lose Buff Event ===') -- Debug line, can be removed later
+
   if buff == 602 and vana.settings.vorseal_wearing then -- Vorseal
     -- Turn the countdown off
     vana.countdowns.vorseal = -1
@@ -1627,6 +1640,8 @@ end)
 
 -- Player changes job
 register_event('job change', function()
+  print_debug('=== Job Change Event ===') -- Debug line, can be removed later
+
   -- Prevents job changing from triggerring ability ready notifications
   vana.paused = true
   coroutine.sleep(3)
@@ -1637,32 +1652,36 @@ end)
 -- TODO: This could still mean hitching experienced every 3 seconds...
 -- TODO: Investigate performance of processes in this event.
 register_event('time change', function(new, old)
-  vana.heartbeat = os.time()
+  local info = get_info()
+  local player = get_player()
 
-  print_debug('=== Time Change Event (Heartbeat) === ['..vana.heartbeat..']') -- Debug line, can be removed later
-
-  if not vana.paused then -- Encapsulate all functionality within the paused check
-    local info = get_info()
-    local player = get_player()
+  -- Exit if player is non-existant, or vana is paused.
+  if not info.logged_in
+  or not player then
+    print_debug('Player does not exist.')
+    return
+  elseif vana.paused then
+    print_debug('Vana is paused.')
+    return
+  else
     local party = get_party()
-    local logged_in = info.logged_in
+    vana.heartbeat = os.time()
 
-    if logged_in and player then
-      print_debug('Player HP: '..tostring(player.vitals.hp)..', Alive: '..tostring(vana.alive):upper())
-    else
-      print_debug('Player not logged in.')
-    end
-
-    -- Exit if player is not logged in fail-safe
-    if not logged_in or not player then
-      return
-    end
+    print_debug('=== Time Change Event (Heartbeat) === ['..vana.heartbeat..']') -- Debug line, can be removed later
+    print_debug(
+      'ServerID: '..tostring(info.server)..', '..
+      'PlayerID: '..tostring(player.id)..', '..
+      'Index: '..tostring(player.index)..', '..
+      'Status: '..tostring(player.status)..', '..
+      'Name: '..tostring(player.name)..', '..
+      'Alive: '..tostring(vana.alive):upper()
+    )
 
     -- The alive flag prevents a few things from happening when knocked out
-    if logged_in and player.vitals.hp == 0 and vana.alive then
-      vana.alive = false
-    elseif logged_in and player.vitals.hp > 0 and not vana.alive then
+    if player.vitals.hp > 0 then
       vana.alive = true
+    else
+      vana.alive = false
     end
 
     -- Update recast timers

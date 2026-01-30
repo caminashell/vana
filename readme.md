@@ -127,7 +127,6 @@ Open the `./data/settings.xml` file to adjust these settings.
 - Implement current job checks for chat alerts (e.g., Looking for WHM, etc).
 - Daily/Weekly task reset notices (Oseem, ROE, Monberaux, Sortie, Odyssey, Domain, etc).
 
-
 ## Changelog
 
 Version 2.6.1-30b
@@ -156,6 +155,9 @@ Version 2.6.1-30b
 - Some code cleanup.
 - Party leader check fixed.
   - Needs further refinement.
+- Removed data folder from repo.
+- Added debug logging for heartbeat (time change) event.
+- Refined checks for heartbeat (time change) event.
 
 Version 2.6.1-29b
 
