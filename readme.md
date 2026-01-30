@@ -168,6 +168,7 @@ Version 2.6.1-30b
 - Removed data folder from repo.
 - Added debug logging for heartbeat (time change) event.
 - Refined checks for heartbeat (time change) event.
+- Vana factory data dump added (on command).
 
 Version 2.6.1-29b
 

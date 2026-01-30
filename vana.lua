@@ -329,6 +329,58 @@ local vana = {
 --   return count
 -- end
 
+function vana_dump()
+  print_debug('Dumping vana data state...')
+
+  local function dump_data(table, file)
+    local function write_out(object, count)
+        count = count or 0
+
+        if type(object) == "table" then
+          io.write("{\n")
+          count = count + 1
+
+          local first = true
+
+          for key, value in pairs(object) do
+              if not first then
+                io.write(",\n")
+              end
+              first = false
+
+              if type(key) == "string" or type(key) == "number" then
+                io.write(string.rep("\t",count), '"'..key..'"', ': ')
+              end
+
+              write_out(value, count)
+          end
+
+          io.write("\n")
+          count = count - 1
+          io.write(string.rep("\t", count), "}")
+
+        elseif type(object) == "string" then
+          io.write(string.format("%q", object))
+
+        else
+          io.write('"'..tostring(object)..'"')
+        end
+    end
+
+    if file == nil then
+        write_out(table)
+    else
+        io.output(addon_path.."data/"..file)
+        io.write("")
+        write_out(table)
+        io.output(io.stdout)
+    end
+    print_debug('Data dumped to: ./data/'..file)
+  end
+
+  dump_data(vana, 'debug_vana.json')
+end
+
 local function notify(msg,sfx)
   if not msg then return end
   add_to_chat(vana.info.text_color,('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
@@ -614,14 +666,14 @@ function build_sound_cache()
 end
 
 -- TODO: Optimize placeholder replacement with caching (unfinished/unused)
-function format_message(template, key)
-  print_debug( 'Formatting message...') -- Debug line, can be removed later
-  local cache_key = template .. (key or '')
-  if vana.placeholder_cache[cache_key] then return vana.placeholder_cache[cache_key] end
-  local result = template:gsub('%${member}', key or '') -- expand as needed
-  vana.placeholder_cache[cache_key] = result
-  return result
-end
+-- function format_message(template, key)
+--   print_debug( 'Formatting message...') -- Debug line, can be removed later
+--   local cache_key = template .. (key or '')
+--   if vana.placeholder_cache[cache_key] then return vana.placeholder_cache[cache_key] end
+--   local result = template:gsub('%${member}', key or '') -- expand as needed
+--   vana.placeholder_cache[cache_key] = result
+--   return result
+-- end
 
 function firstRun()
   print_debug( 'Checking first run...') -- Debug line, can be removed later
@@ -1795,6 +1847,16 @@ register_event('addon command',function(addcmd, ...)
       add_to_chat(8,('[Vana] '):color(220)..('Monitor Mode: '):color(8)..('On'):color(1):upper())
     else
       add_to_chat(8,('[Vana] '):color(220)..('Monitor Mode: '):color(8)..('Off'):color(1):upper())
+    end
+
+  elseif addcmd == "dump" then
+
+    if vana.debug_mode then
+      add_to_chat(8,('[Vana] '):color(220)..('Process may take a few seconds to complete...'))
+      vana_dump()
+      add_to_chat(8,('[Vana] '):color(220)..('Vana data dumped to: ../vana/data/debug_vana.json'):color(8))
+    else
+      add_to_chat(8,('[Vana] '):color(220)..('"Debug Mode" must be active to dump data! No action taken.'))
     end
 
   elseif addcmd == "test" then
