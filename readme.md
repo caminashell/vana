@@ -19,7 +19,8 @@
   - **Vorseal Wearing** → Notifies you when your Vorseal buff is about to expire.
   - **Mireu Pop Alerts** → Notifies you when the NM Mireu is mentioned.
   - **Mog Locker Expiring** → Don't let your Mog Locker lease expire.
-  - **Reraise Check** → Don't forget... again.
+  - **Reraise Check** → A safety awareness check.
+  - **Sparks Reminder** → Reminds you to spend your Sparks and Accolades.
 - <ins>**Enhanced Party Awareness**</ins>
   - **Low MP Warnings** → Alerts you if a party member needs Refresh.
   - **Party & Alliance Updates** → Get messages when members join or leave.
@@ -76,7 +77,7 @@ Open the `./data/settings.xml` file to adjust these settings.
 | `sound_effects` | Play sound effects for alerts and notifications. |
 | `sparks_reminder` | A weekly reminder to use your Sparks and Accolades. Will play at login if the day/time passes while logged out. |
 | `sparks_reminder_day` | Day of the week the Sparks reminder will run.<br> - Is not case-sensitive and accepts full day names and common abbreviations such as `tu`, `tue`, and `tues`.<br> - Defaults to Saturday if unable to determine the day. |
-| `sparks_reminder_time` | Time the Sparkolade reminder will run.<br> - Time must be a number in military time, i.e., `1730` instead of `5:30 PM`.<br> - Defaults to `1200` if unable to determine time. |
+| `sparks_reminder_time` | Time the Sparks reminder will run.<br> - Time must be a number in military time, i.e., `1730` instead of `5:30 PM`.<br> - Defaults to `1200` if unable to determine time. |
 
 ------
 
