@@ -28,11 +28,20 @@
 
 ## Differences to Helper
 
-- **The "Vana" helper profile is the only one available.**
-- **There is minimal customization available.**
-- **You cannot create, load, or unload helpers.**
-- **There is no "flavor text" feature.**
-- **There is no "voices" feature.**
+- <ins>**Features**</ins>
+  - **The "Vana" helper profile is the only one available.**
+  - **There is minimal customization available.**
+  - **You cannot create, load, or unload helpers.**
+  - **There is no "flavor text" feature.**
+  - **There is no "voices" feature.**
+- <ins>**Runtime**</ins>
+  - **Heartbeat (main process) runs on the `time change` (every ~3s) and not `prerender` (every frame) event.**
+  - **Group tracking is only active when a party is active.**
+  - **Operates using data from an internal table namespace.**
+  - **Uses event listeners to process notifications.**
+  - **Refined checks for various flags and statuses.**
+  - **Never calls the internet to pull down resources.**
+  - **Debug and performance monitoring options are available.**
 
 ## History of Helper
 
