@@ -1,7 +1,7 @@
 
-# Vana (Helper)
+# Vana
 
-`Vana` is an assistant that provides helpful event alerts and reminders to enhance experience in Final Fantasy XI. This addon is a purposefully stripped-down alternate of the orginal `Helper (v2.3.2)` addon by Keylesta (see [History of Helper](#history-of-helper)), optimised for performance and stability.
+`Vana` is an assistant that provides helpful event alerts and reminders to enhance experience in Final Fantasy XI. This addon is a purposefully stripped-down alternate (spin) of the orginal `Helper (v2.3.2)` addon by Keylesta (see [History of Helper](#history-of-helper)), optimised for performance and stability.
 
 >
 > [!CAUTION]
@@ -32,40 +32,6 @@
 - **You cannot create, load, or unload helpers.**
 - **There is no "flavor text" feature.**
 - **There is no "voices" feature.**
-
-## Motivations
-
-After initial testing of the original Helper, within a full-alliance DynamisD session, significant performance impact was observed just by having Helper loaded versus unloaded - resulting with consistant lag spikes, stuttering, and what translated to a poor combat experience.
-
-After the DynaD session concluded, an investigation of the code was conducted to figure out what could have been the issue - and was shocked to find that the addon was doing a lot of unnecessary and unconditioned work.
-
-The original Helper addon contained many (fancy) sections of logic that as a result block the Windower Lua thread (which runs on the same thread that feeds data to the game). Frequent IO operations (disk read/write), repetitive global function calls; requests to remote destinations on the internet; causing lag spikes, stuttering, and IO process overhead. I was overly concerned about the performance impact of the addon, and wanted to make sure it wasn't a problem.
-
-Furthermore, a lot of heavy function calls being made from the prerender event, which runs every frame (60) per second, regardless of interval, was causing the addon to stress the Lua thread (and system as a whole).
-
-There are a lot of things that can be done to improve the addon's performance, but I wanted to keep it as simple as possible, and not add too many features that would make it more complex.
-
-- Garbage collection (GC) spikes are a problem.
-- Heavy use of os.clock() to determine time, which is CPU time, not wall time.
-- Expensive processing for party structure updates and recast checks.
-- Heavy use of Lua functions that are called frequently, such as get_party(), get_player(), get_info(), etc.
-- Not much use of coroutines or caching.
-- Overly large local functions and tables.
-- String.gsub in hot paths causing GC pressure.
-
-The result was this version that focuses on core (KISS) features only;
-
-- **introduction of a file cache** - Initialised once at load time and used for reference to negate frequest filesystem operations.
-- **added debouncing/throttling** - to reduce the impact to performance by triggering IO operations less frequently.
-- **complete removal of curl** (calls to internet), which are generally not a good thing to be doing in a Lua thread.
-- **removal of the helper extensions** - they aren't needed, as Vana does the job.
-- ... and a few more logic optimisations to minimize performance impact.
-
->
-> [!NOTE]
-> It is not my intention to suggest that this version is better than the original, but it is a good alternative to the original.
-> The original Helper addon is a masterpiece of work and I commend its creator for the work they put into it.
-> But for my own personal use, I wanted to make a simpler, more performant, and more stable addon.
 
 ## History of Helper
 
@@ -113,6 +79,40 @@ Open the `./data/settings.xml` file to adjust these settings.
 | `sparkolade_reminder_time` | Time the Sparkolade reminder will run.<br> - Time must be a number in military time, i.e., `1730` instead of `5:30 PM`.<br> - Defaults to `1200` if unable to determine time. |
 
 ------
+
+## Motivations
+
+After initial testing of the original Helper, within a full-alliance DynamisD session, significant performance impact was observed just by having Helper loaded versus unloaded - resulting with consistant lag spikes, stuttering, and what translated to a poor combat experience.
+
+After the DynaD session concluded, an investigation of the code was conducted to figure out what could have been the issue - and was shocked to find that the addon was doing a lot of unnecessary and unconditioned work.
+
+The original Helper addon contained many (fancy) sections of logic that as a result block the Windower Lua thread (which runs on the same thread that feeds data to the game). Frequent IO operations (disk read/write), repetitive global function calls; requests to remote destinations on the internet; causing lag spikes, stuttering, and IO process overhead. I was overly concerned about the performance impact of the addon, and wanted to make sure it wasn't a problem.
+
+Furthermore, a lot of heavy function calls being made from the prerender event, which runs every frame (60) per second, regardless of interval, was causing the addon to stress the Lua thread (and system as a whole).
+
+There are a lot of things that can be done to improve the addon's performance, but I wanted to keep it as simple as possible, and not add too many features that would make it more complex.
+
+- Garbage collection (GC) spikes are a problem.
+- Heavy use of os.clock() to determine time, which is CPU time, not wall time.
+- Expensive processing for party structure updates and recast checks.
+- Heavy use of Lua functions that are called frequently, such as get_party(), get_player(), get_info(), etc.
+- Not much use of coroutines or caching.
+- Overly large local functions and tables.
+- String.gsub in hot paths causing GC pressure.
+
+The result was this version that focuses on core (KISS) features only;
+
+- **introduction of a file cache** - Initialised once at load time and used for reference to negate frequest filesystem operations.
+- **added debouncing/throttling** - to reduce the impact to performance by triggering IO operations less frequently.
+- **complete removal of curl** (calls to internet), which are generally not a good thing to be doing in a Lua thread.
+- **removal of the helper extensions** - they aren't needed, as Vana does the job.
+- ... and a few more logic optimisations to minimize performance impact.
+
+>
+> [!NOTE]
+> It is not my intention to suggest that this version is better than the original, but it is a good alternative to the original.
+> The original Helper addon is a masterpiece of work and I commend its creator for the work they put into it.
+> But for my own personal use, I wanted to make a simpler, more performant, and more stable addon.
 
 ## Feature Ideas
 
