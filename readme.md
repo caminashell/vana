@@ -35,7 +35,7 @@
   - **There is no "flavor text" feature.**
   - **There is no "voices" feature.**
 - <ins>**Runtime**</ins>
-  - **Heartbeat (main process) runs on the `time change` (every ~3s) and not `prerender` (every frame) event.**
+  - **Main process runs on the `time change` (every ~3s) and not `prerender` (every frame) event.**
   - **Group tracking is only active when a party is active.**
   - **Operates using data from an internal table namespace.**
   - **Uses event listeners to process notifications.**
