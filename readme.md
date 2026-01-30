@@ -169,6 +169,7 @@ Version 2.6.1-30b
 - Added debug logging for heartbeat (time change) event.
 - Refined checks for heartbeat (time change) event.
 - Vana factory data dump added (on command).
+- Moved Vorseal, Reraise, and Mireu checks to every minute.
 
 Version 2.6.1-29b
 

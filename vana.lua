@@ -1753,21 +1753,20 @@ register_event('time change', function(new, old)
       monitor("checkKIReminderTimestamps()", checkKIReminderTimestamps)
     end
 
+     -- Check Vorseal, Reraise, and Mireu every minute
+    if vana.heartbeat % 60 == 0 then
+      monitor("countdownForVorsealChecks()", countdownForVorsealChecks)
+      monitor("countdownForReraiseChecks()", countdownForReraiseChecks, player)
+      if vana.settings.mireu_popped and vana.countdowns.mireu > 0 then
+        -- ... so we don't call "Mireu popped" when the battle is over
+        vana.countdowns.mireu = vana.countdowns.mireu - 1
+      end
+    end
+
      -- Party only executions: Track group structure + Countdown for checking party for low MP
     if vana.group_state.in_party or party.party1_count > 1 then
       monitor("group_tracker()", group_tracker, info, player, party)
       monitor("countdownForPartyLowMPChecks()", countdownForPartyLowMPChecks, player.main_job)
-    end
-
-    -- Countdown for Vorseal Check
-    monitor("countdownForVorsealChecks()", countdownForVorsealChecks)
-
-    -- Countdown for Reraise Check
-    monitor("countdownForReraiseChecks()", countdownForReraiseChecks, player)
-
-    -- Countdown for Mireu (so we don't call "Mireu popped" when the battle is over)
-    if vana.settings.mireu_popped and vana.countdowns.mireu > 0 then
-      vana.countdowns.mireu = vana.countdowns.mireu - 1
     end
 
   end
