@@ -13,7 +13,7 @@
 
 _addon = {
   name = 'Vana',
-  version = '2.6.1-30b',
+  version = '2.6.1-31b',
   author = 'key [keylesta@valefor], caminashell [avestara@asura]',
   commands = {'vana'},
   description = 'An assistant that provides helpful event alerts and reminders to enhance experience in Final Fantasy XI. See README for details.',
@@ -28,19 +28,15 @@ math.randomseed(os.time())
 
 --[[ === DEFINITIONS === ]]---
 
-_w = windower
-addon_path = _w.addon_path
-add_to_chat = _w.add_to_chat
-get_ability_recasts = _w.ffxi.get_ability_recasts
-get_dir = _w.get_dir
-get_info = _w.ffxi.get_info
-get_key_items = _w.ffxi.get_key_items
-get_party = _w.ffxi.get_party
-get_player = _w.ffxi.get_player
-register_event = _w.register_event
-play_sound = _w.play_sound
+addon_path = windower.addon_path
+add_to_chat = windower.add_to_chat
+get_dir = windower.get_dir
+register_event = windower.register_event
+play_sound = windower.play_sound
 
--- Define defaults for Vana
+debounce = false
+
+-- Defaults for Settings
 defaults = {
   first_run = true,
   have_key_item = {
@@ -148,12 +144,12 @@ defaults = {
   },
 }
 
--- Bridge settings data from defaults
+-- Bridge settings data from Defaults
 settings = config.load(defaults)
 options = settings.options
 notifications = options.notifications
 
--- Define initial state for Vana
+-- Initial state for Vana
 vana = {
   _save_scheduled = false,
   abilities = {
@@ -846,8 +842,7 @@ function saveReminderTimestamp(key_item, key_item_reminder_repeat_hours)
   end
 
   --Save the timestamp for X hours into the future
-  local player = get_player()
-  vana.settings.timestamps[key_item][string.lower(player.name)] = os.time() + (hours * 60 * 60)
+  vana.settings.timestamps[key_item][string.lower(vana.cache.player.name)] = os.time() + (hours * 60 * 60)
   schedule_settings_save()
 end
 
@@ -858,11 +853,8 @@ function haveKeyItem(key_item_id)
     return false
   end
 
-  --Get the player's key items
-  local key_items = get_key_items()
-
   --Check if the given key_item_id exists in the player's key items
-  for _, id in ipairs(key_items) do
+  for _, id in ipairs(vana.cache.key_items) do
     if id == key_item_id then
       return true
     end
@@ -885,7 +877,7 @@ function checkKIReminderTimestamps()
 
     if vana.settings.key_item_reminders[key_item] then
 
-      local player = get_player()
+      local player = vana.cache.player
       local reminder_time = vana.settings.timestamps[key_item][string.lower(player.name)] or 0
       local have_ki = vana.settings.have_key_item[key_item][string.lower(player.name)] or false
 
@@ -937,7 +929,7 @@ function checkMogLockerReminder()
   local one_week = 7 * 24 * 60 * 60  --7 days in seconds
   local one_day = 24 * 60 * 60  --24 hours in seconds
 
-  local player = get_player()
+  local player = vana.cache.player
   local expiration_time = vana.settings.timestamps.mog_locker_expiration[string.lower(player.name)] or 0
   local reminder_time = vana.settings.timestamps.mog_locker_reminder[string.lower(player.name)] or 0
 
@@ -1016,7 +1008,7 @@ end
 function updateRecasts()
   print_debug( 'Updating recasts...') -- Debug line, can be removed later
 
-  local ability_recast = get_ability_recasts()
+  local ability_recast = vana.cache.ability_recasts
 
   vana.recast.sp1 = ability_recast[0] and math.floor(ability_recast[0]) or 0
   vana.recast.sp2 = ability_recast[254] and math.floor(ability_recast[254]) or 0
@@ -1055,7 +1047,7 @@ end
 -- Party MP checks (called every heartbeat (1s))
 function checkPartyForLowMP()
   print_debug( 'Checking party MP...') -- Debug line, can be removed later
-  local player_job = get_player().main_job
+  local player_job = vana.cache.player.main_job
 
   --Replace redresh placeholders
   local function refreshPlaceholder(text, member, job)
@@ -1071,7 +1063,7 @@ function checkPartyForLowMP()
   local positions = {'p1','p2','p3','p4','p5'}
   for _, position in ipairs(positions) do
 
-    local member = get_party()[position]
+    local member = vana.cache.party[position]
 
     if member and member.mp and member.mpp then
 
@@ -1083,7 +1075,7 @@ function checkPartyForLowMP()
 
         local msg = vana.events.party_low_mp
         if msg then
-          msg = refreshPlaceholder(msg,member.name,player_job)
+          msg = refreshPlaceholder(msg, member.name, player_job)
           add_to_chat(vana.info.text_color, ('['..vana.info.name..'] '):color(vana.info.name_color)..(msg):color(vana.info.text_color))
           playSound('party_low_mp')
         end
@@ -1111,7 +1103,7 @@ end
 -- Replace the ability placeholders (potential call every heartbeat (1s))
 function abilityPlaceholders(text, ability)
   print_debug( 'Replacing ability placeholders...') -- Debug line, can be removed later
-  local player_job = get_player().main_job
+  local player_job = vana.cache.player.main_job
 
   local SP1 = {
     WAR = "Mighty Strikes", MNK = "Hundred Fists", WHM = "Benediction",
@@ -1330,9 +1322,12 @@ register_event('load', function()
   print_debug('=== Re/Load Event === ') -- Debug line, can be removed later
 
   -- Snapshot data into vana namespace (local cache)
-  vana.cache.info = get_info()
-  vana.cache.player = get_player()
-  vana.cache.party = get_party()
+  local ffxi = windower.ffxi
+  vana.cache.ability_recasts = ffxi.get_ability_recasts()
+  vana.cache.info = ffxi.get_info()
+  vana.cache.key_items = ffxi.get_key_items()
+  vana.cache.player = ffxi.get_player()
+  vana.cache.party = ffxi.get_party()
 
   if vana.cache.info.logged_in then
 
@@ -1356,9 +1351,12 @@ register_event('login', function()
   vana.paused = true
 
   -- Snapshot data into vana namespace (local cache)
-  vana.cache.info = get_info()
-  vana.cache.player = get_player()
-  vana.cache.party = get_party()
+  local ffxi = windower.ffxi
+  vana.cache.ability_recasts = ffxi.get_ability_recasts()
+  vana.cache.info = ffxi.get_info()
+  vana.cache.key_items = ffxi.get_key_items()
+  vana.cache.player = ffxi.get_player()
+  vana.cache.party = ffxi.get_party()
 
   -- Wait 5 seconds to let game values load
   coroutine.schedule(function()
@@ -1400,7 +1398,8 @@ end)
 
 -- Parse incoming packets
 register_event('incoming chunk', function(id, original, modified, injected, blocked)
-  -- !! This floods the console, uncomment only for packet debugging
+  -- !! Processes here seem expensive (per chunk/packet), may need optimisation.
+  -- !! This floods the console, uncomment only for packet debugging...
   -- print_debug('=== Incoming Chunk Event ===') -- Debug line, can be removed later
 
   if injected or blocked then return end
@@ -1419,7 +1418,10 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
       vana.cap_points = packet[job..' Capacity Points'] or vana.cap_points
       vana.job_points = packet[job..' Job Points'] or vana.job_points
 
-      if vana.debug_mode then
+      if vana.debug_mode
+      and not debounce
+      then
+        debounce = true
         print_debug(
           'Limit Points: '..vana.limit_points..
           ', Merit Points: '..vana.merit_points..
@@ -1430,6 +1432,7 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
           ' Job Points: '..vana.job_points
         )
       end
+
     end
 
   -- Killed a monster packet
@@ -1454,13 +1457,16 @@ register_event('incoming chunk', function(id, original, modified, injected, bloc
 
     end
 
-  elseif id == 0xB then -- Zone start
+  -- Zone start
+  elseif id == 0xB then
     if vana.cache.info.logged_in and not vana.zoned then
       vana.zoned = true
       vana.paused = true
+      debounce = false
     end
 
-  elseif id == 0xA then -- Zone finish
+  -- Zone finish
+  elseif id == 0xA then
     if vana.cache.info.logged_in and vana.zoned then
       vana.zoned = false
       -- Short delay after zoning to prevent "left...joined" messages after every zone.
@@ -1532,8 +1538,7 @@ register_event("incoming text", function(original,modified,original_mode)
       })
 
       -- Store the timestamp in the timestamps table
-      local player = get_player()
-      vana.settings.timestamps.mog_locker_expiration[string.lower(player.name)] = lease_expiry_time
+      vana.settings.timestamps.mog_locker_expiration[string.lower(vana.cache.player.name)] = lease_expiry_time
       schedule_settings_save()
 
     end
@@ -1668,7 +1673,7 @@ register_event('lose buff', function(buff)
   -- Signet, Sanction, Sigil, Ionis
   elseif (buff == 253 or buff == 256 or buff == 268 or buff == 512) and vana.settings.signet_wears_off then
     local function regionBuffActive()
-      local buffs = get_player().buffs
+      local buffs = vana.cache.player.buffs
       local regionBuffs = { [253] = true, [256] = true, [268] = true, [512] = true }
 
       for _, buffId in ipairs(buffs) do
@@ -1721,8 +1726,9 @@ end)
 -- TODO: Investigate performance of processes in this event.
 register_event('time change', function(new, old)
   -- Snapshot data into vana namespace (local cache)
-  vana.cache.info = get_info()
-  vana.cache.player = get_player()
+  local ffxi = windower.ffxi
+  vana.cache.info = ffxi.get_info()
+  vana.cache.player = ffxi.get_player()
   info = vana.cache.info
   player = vana.cache.player
 
@@ -1735,8 +1741,9 @@ register_event('time change', function(new, old)
     print_debug('Vana is paused.')
     return
   else
-    vana.cache.party = get_party()
     vana.heartbeat = os.time()
+    vana.cache.key_items = ffxi.get_key_items()
+    vana.cache.party = ffxi.get_party()
     party = vana.cache.party
 
     print_debug('=== Time Change Event (Heartbeat) === ['..vana.heartbeat..']') -- Debug line, can be removed later
@@ -1797,7 +1804,7 @@ end)
 register_event('addon command',function(addcmd, ...)
 
   if addcmd == 'help' or addcmd == nil then
-    player = player or get_player()
+    player = vana.cache.player
 
     local function getLastCheckDate()
       if not vana.settings.timestamps.last_check or vana.settings.timestamps.last_check == 0 then

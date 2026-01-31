@@ -139,6 +139,11 @@ The result was this version that focuses on core (KISS) features only;
 
 ## Changelog
 
+Version 2.6.1-31b
+
+- FFXI info, player, party, key items, and ability recasts now cached in local namespace.
+  - Vana will refer to data stored in cache rather than continually querying the game.
+
 Version 2.6.1-30b
 
 - Renamed addon (and command) to Vana.
