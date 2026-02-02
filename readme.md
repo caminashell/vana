@@ -127,17 +127,27 @@ The result was this version that focuses on core (KISS) features only;
 ## Feature Ideas
 
 - Low ninjutsu tool alerts.
-- Stealth wearing alerts.
 - Bazaar state purchase notifications & command list.
 - Monster agression intel on check (exclude battle arenas).
 - Notorious Monsters (NM) appearance alerts.
-- ~~Auto warp(ring) safety if in hostile areas, e.g. after idle for 1hr.~~
 - Doze/AFK message alert when in group.. e.g. every 10 minutes.
 - Implement Besieged message alert.
 - Implement current job checks for chat alerts (e.g., Looking for WHM, etc).
 - Daily/Weekly task reset notices (Oseem, ROE, Monberaux, Sortie, Odyssey, Domain, etc).
+- Integrate Domain Invasion (DI) notifications (if addon is loaded).
+- Mogolphone & Amp buff check (every 5 minutes, if in Rabeo).
+- Seal buff check (every 5 minutes, if in Mhaura).
+- Language support (EN, JP, etc).
 
 ## Changelog
+
+Version 2.6.2-2b
+
+- Refined Party MP check logic.
+  - Now only runs once per minute.
+- Added Stealth wearing alerts.
+- Removed unused code.
+- Cleaned up push notification processing.
 
 Version 2.6.1-31b
 
