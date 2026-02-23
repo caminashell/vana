@@ -10,12 +10,13 @@
 -- TODO: Feature Idea: Mogolphone & Amp buff check (every 5 minutes, if in Rabeo).
 -- TODO: Feature Idea: Seal buff check (every 5 minutes, if in Mhaura).
 -- TODO: Feature Idea: Language support (EN, JP, etc).
+-- TODO: Feature Idea: Campaign Alerts (Based on player alliegnce unless overriden by player).
 
 --[[ === THIS PROJECT IS IN DEVELOPMENT, NOT READY FOR USE === ]]--
 
 _addon = {
   name = 'Vana',
-  version = '2.6.2-2b',
+  version = '2.6.2-23b',
   author = 'key [keylesta@valefor], caminashell [avestara@asura]',
   commands = {'vana'},
   description = 'An assistant that provides helpful event alerts and reminders to enhance experience in Final Fantasy XI. See README for details.',
@@ -386,7 +387,7 @@ end
 function play_sound(sound_name)
   if not sound_name then return end
 
-  print_debug( 'Playing sound...') -- Debug line, can be removed later
+  print_debug( 'Playing sound...')
   if not vana.settings.sound_effects then return end
 
   local file_name = sound_name..".wav"
@@ -537,7 +538,7 @@ end
 -- Debounced settings save, replacing immediate saves.
 -- Reduces IO load and CPU load.
 function schedule_settings_save(delay)
-  print_debug( 'Scheduling settings save...') -- Debug line, can be removed later
+  print_debug( 'Scheduling settings save...')
   if vana._save_scheduled then return end
   vana._save_scheduled = true
   delay = delay or 5
@@ -549,7 +550,7 @@ end
 
 -- Sound / file cache (built once, at load time)
 function build_sound_cache()
-  print_debug( 'Building sound cache...') -- Debug line, can be removed later
+  print_debug( 'Building sound cache...')
   vana.sound_cache = {}
   -- scan media_folder and helper folders once
   local files = get_dir(vana.media_folder) or {}
@@ -560,7 +561,7 @@ end
 
 -- First run of addon
 function first_run()
-  print_debug( 'Checking first run...') -- Debug line, can be removed later
+  print_debug( 'Checking first run...')
   -- Exit if this isn't the first run
   if not vana.settings.first_run then return end
 
@@ -576,16 +577,29 @@ function first_run()
 
 end
 
+-- Reset vana
+function reset_vana()
+  print_debug('Resetting vana...')
+  vana.cache = {}
+  vana.group_state.in_party = false
+  vana.group_state.in_alliance = false
+  vana.group_state.party_leader = false
+  vana.group_state.alliance_leader = false
+  vana.paused = false
+  vana.alive = false
+  vana.zoned = false
+end
+
 -- Save the time of the last check
 function saveLastCheckTime()
-  print_debug( 'Saving last check time...') -- Debug line, can be removed later
+  print_debug( 'Saving last check time...')
   vana.settings.timestamps.last_check = os.time()
   schedule_settings_save()
 end
 
 -- Capitalize first letter
 function capitalize(str)
-  print_debug( 'Capitalizing string...') -- Debug line, can be removed later
+  print_debug( 'Capitalizing string...')
   str = string.gsub(str, "(%w)(%w*)", function(firstLetter, rest)
     return string.upper(firstLetter)..string.lower(rest)
   end)
@@ -597,7 +611,7 @@ end
 -- Introduce the Helper
 function introduce()
   if vana.settings.introduce_on_load then
-    print_debug( 'Introducing helper...') -- Debug line, can be removed later
+    print_debug( 'Introducing helper...')
     local introduction = vana.info.introduction
 
     if introduction then
@@ -620,7 +634,7 @@ end
 function initialize(player, party)
   if not player then return end
 
-  print_debug('Initializing...') -- Debug line, can be removed later
+  print_debug('Initializing...')
   -- Reset states on load / login
   vana.limit_points = 0
   vana.merit_points = 0
@@ -648,7 +662,7 @@ function check_mog_locker()
     return
   end
 
-  print_debug( 'Checking Mog Locker lease time...') -- Debug line, can be removed later
+  print_debug( 'Checking Mog Locker lease time...')
   local current_time = os.time()
   local one_week = 7 * 24 * 60 * 60  --7 days in seconds
   local one_day = 24 * 60 * 60  --24 hours in seconds
@@ -684,7 +698,7 @@ end
 function check_sparks()
   -- Set the Sparks reminder timestamp
   local function setSparksReminderTimestamp()
-    print_debug( 'Setting Sparks reminder timestamp...') -- Debug line, can be removed later
+    print_debug( 'Setting Sparks reminder timestamp...')
     local days_of_week = {
       sunday = 1, sun = 1, su = 1,
       monday = 2, mon = 2, mo = 2,
@@ -757,7 +771,7 @@ function check_sparks()
     return
   end
 
-  print_debug( 'Checking Sparks...') -- Debug line, can be removed later
+  print_debug( 'Checking Sparks...')
 
   local current_time = os.time()
 
@@ -781,7 +795,7 @@ end
 
 -- Check key items (once every 10 minutes)
 function check_key_items()
-  print_debug( 'Checking key items...') -- Debug line, can be removed later
+  print_debug( 'Checking key items...')
 
   -- Check if the player has a key item
   local function has_key_item(key_item_id)
@@ -801,7 +815,7 @@ function check_key_items()
 
   -- Save the current timestamp for a key item
   local function save_reminder_time(key_item, key_item_reminder_repeat_hours)
-    print_debug( 'Saving reminder timestamp...') -- Debug line, can be removed later
+    print_debug( 'Saving reminder timestamp...')
     if not key_item then
       return
     end
@@ -870,7 +884,7 @@ end
 -- Check Vorseal (once per minute)
 function check_vorseal()
   if vana.settings.vorseal_wearing then
-    print_debug( 'Checking Vorseal...') -- Debug line, can be removed later
+    print_debug( 'Checking Vorseal...')
 
     if vana.countdowns.vorseal > 0 then
       -- Deduct 60 seconds from countdown
@@ -890,7 +904,7 @@ end
 -- Check Reraise (once per minute)
 function check_reraise()
   if vana.settings.reraise_check then
-    print_debug( 'Checking Reraise...') -- Debug line, can be removed later
+    print_debug( 'Checking Reraise...')
 
     if vana.countdowns.reraise > 0 then
       vana.countdowns.reraise = vana.countdowns.reraise - 1
@@ -910,7 +924,7 @@ function check_reraise()
 
       -- Check if in a town zone
       local function is_town_zone()
-        print_debug( 'Checking if in town zone...') -- Debug line, can be removed later
+        print_debug( 'Checking if in town zone...')
 
         local current_zone = res.zones[vana.cache.info.zone].name
 
@@ -971,7 +985,7 @@ function check_party_mp(player_job)
       vana.countdowns.party_min_limit = vana.countdowns.party_min_limit - 1
 
     elseif vana.countdowns.party_min_limit == 0 then
-      print_debug( 'Checking party MP...') -- Debug line, can be removed later
+      print_debug( 'Checking party MP...')
 
       -- Replace refresh wildcard condition
       local function stub_refresh(msg, member, job)
@@ -1016,7 +1030,7 @@ end
 
 -- Check abilities are ready (once per heartbeat)
 function check_ability_ready()
-  print_debug('Checking abilities...') -- Debug line, can be removed later
+  print_debug('Checking abilities...')
 
   -- Replace the ability placeholders (potential call every heartbeat (1s))
   local function ability_check(msg, ability)
@@ -1082,9 +1096,10 @@ function check_ability_ready()
 end
 
 -- Check recast timers (once per heartbeat)
-function check_recasts()
-  print_debug( 'Checking recasts...') -- Debug line, can be removed later
+function check_recasts(ffxi)
+  print_debug( 'Checking recasts...')
 
+  vana.cache.ability_recasts = ffxi.get_ability_recasts()
   local ability_recast = vana.cache.ability_recasts
 
   vana.recast.sp1 = ability_recast[0] and math.floor(ability_recast[0]) or 0
@@ -1265,7 +1280,7 @@ end
 
 -- Load / Reload
 register_event('load', function()
-  print_debug('=== Re/Load Event === ') -- Debug line, can be removed later
+  print_debug('=== Re/Load Event === ')
 
   -- Snapshot data into vana namespace (local cache)
   local ffxi = windower.ffxi
@@ -1277,19 +1292,25 @@ register_event('load', function()
 
   if vana.cache.info.logged_in then
 
-    initialize(vana.cache.player, vana.cache.party)
-    build_sound_cache()
-    check_recasts()
-    first_run()
-    introduce()
+    monitor('initialize()', initialize, vana.cache.player, vana.cache.party)
+    monitor('build_sound_cache()', build_sound_cache)
+    monitor('check_recasts(ffxi)', check_recasts, ffxi)
+    monitor('first_run()', first_run)
+    monitor('introduce()', introduce)
 
   end
 
 end)
 
+-- Unload
+register_event('unload', function()
+  print_debug('=== Unload Event ===')
+  reset_vana()
+end)
+
 -- Login
 register_event('login', function()
-  print_debug('=== Login Event ===') -- Debug line, can be removed later
+  print_debug('=== Login Event ===')
 
   vana.paused = true
 
@@ -1304,13 +1325,13 @@ register_event('login', function()
   -- Wait 5 seconds to let game values load
   coroutine.schedule(function()
 
-    initialize(vana.cache.player, vana.cache.party)
+    monitor('initialize()', initialize, vana.cache.player, vana.cache.party)
 
     vana.paused = false
 
-    check_recasts()
-    first_run()
-    introduce()
+    monitor('check_recasts()', check_recasts, ffxi)
+    monitor('first_run()', first_run())
+    monitor('introduce()', introduce())
 
   end, 5)
 
@@ -1322,25 +1343,15 @@ end)
 
 -- Logout (reset starting states)
 register_event('logout', function()
-  print_debug('=== Logout Event ===') -- Debug line, can be removed later
-
-  -- Reset vana states
-  vana.cache = {}
-  vana.group_state.in_party = false
-  vana.group_state.in_alliance = false
-  vana.group_state.party_leader = false
-  vana.group_state.alliance_leader = false
-  vana.paused = false
-  vana.alive = false
-  vana.zoned = false
-
+  print_debug('=== Logout Event ===')
+  reset_vana()
 end)
 
 -- Parse incoming packets
 register_event('incoming chunk', function(id, original, modified, injected, blocked)
   -- !! Processes here seem expensive (per chunk/packet), may need optimisation.
   -- !! This floods the console, uncomment only for packet debugging...
-  -- print_debug('=== Incoming Chunk Event ===') -- Debug line, can be removed later
+  -- print_debug('=== Incoming Chunk Event ===')
 
   if injected or blocked then return end
 
@@ -1448,7 +1459,7 @@ end)
 
 -- Parses incoming text for Mog locker lease messages and Mireu pop messages
 register_event("incoming text", function(original,modified,original_mode)
-  print_debug('=== Incoming Text Event ===') -- Debug line, can be removed later
+  print_debug('=== Incoming Text Event ===')
 
   if original_mode == 148 then
 
@@ -1565,7 +1576,7 @@ end)
 
 -- Player gains a buff
 register_event('gain buff', function(buff)
-  print_debug('=== Gain Buff Event ===') -- Debug line, can be removed later
+  print_debug('=== Gain Buff Event ===')
 
   if buff == 188 and vana.settings.sublimation_charged and not vana.paused then -- Sublimation: Complete
     local msg = vana.events.sublimation_charged
@@ -1581,7 +1592,7 @@ end)
 
 -- Player loses a buff
 register_event('lose buff', function(buff)
-  print_debug('=== Lose Buff Event ===') -- Debug line, can be removed later
+  print_debug('=== Lose Buff Event ===')
 
   if buff == 602 and vana.settings.vorseal_wearing then -- Vorseal
     -- Turn the countdown off
@@ -1620,6 +1631,7 @@ register_event('lose buff', function(buff)
   -- Signet, Sanction, Sigil, Ionis
   elseif (buff == 253 or buff == 256 or buff == 268 or buff == 512) and vana.settings.signet_expires then
     -- Recheck player region buffs, as may have been replaced/refreshed.
+    vana.cache.player.buffs = windower.ffxi.get_player().buffs
     local region_buffs = { [253] = true, [256] = true, [268] = true, [512] = true }
     for _, buff_id in ipairs(vana.cache.player.buffs) do
       if region_buffs[buff_id] then
@@ -1645,7 +1657,7 @@ end)
 
 -- Player changes job
 register_event('job change', function()
-  print_debug('=== Job Change Event ===') -- Debug line, can be removed later
+  print_debug('=== Job Change Event ===')
 
   -- Prevents job changing from triggerring ability ready notifications
   vana.paused = true
@@ -1678,7 +1690,7 @@ register_event('time change', function(new, old)
     vana.cache.party = ffxi.get_party()
     party = vana.cache.party
 
-    print_debug('=== Time Change Event (Heartbeat) === ['..vana.heartbeat..']') -- Debug line, can be removed later
+    print_debug('=== Time Change Event (Heartbeat) === ['..vana.heartbeat..']')
     print_debug(
       'ServerID: '..tostring(info.server)..', '..
       'PlayerID: '..tostring(player.id)..', '..
@@ -1728,8 +1740,7 @@ register_event('time change', function(new, old)
     end
 
     -- Checks for every heartbeat (~3s)
-    vana.cache.ability_recasts = ffxi.get_ability_recasts()
-    monitor("check_recasts()", check_recasts)
+    monitor("check_recasts()", check_recasts, ffxi)
     monitor("check_ability_ready()", check_ability_ready)
 
   end
@@ -1865,7 +1876,7 @@ ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 -- TODO: Optimize placeholder replacement with caching (unfinished/unused)
 -- function format_message(template, key)
---   print_debug( 'Formatting message...') -- Debug line, can be removed later
+--   print_debug( 'Formatting message...')
 --   local cache_key = template .. (key or '')
 --   if vana.placeholder_cache[cache_key] then return vana.placeholder_cache[cache_key] end
 --   local result = template:gsub('%${member}', key or '') -- expand as needed

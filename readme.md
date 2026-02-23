@@ -141,6 +141,11 @@ The result was this version that focuses on core (KISS) features only;
 
 ## Changelog
 
+Version 2.6.2-23b
+
+- Added Unload event.
+- Consolidated vana reset process.
+
 Version 2.6.2-2b
 
 - Refined Party MP check logic.
